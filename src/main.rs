@@ -1,8 +1,11 @@
+use bcrypt;
+use dialoguer::{console::Term, theme::ColorfulTheme, Select};
 use ethers::prelude::k256::ecdsa::SigningKey;
-use ethers::prelude::k256::Secp256k1;
 use ethers::prelude::*;
-use ethers::signers::coins_bip39::{mnemonic, English, Mnemonic};
+use ethers::signers::coins_bip39::{English, Mnemonic};
 use ethers::types::transaction::eip2718::TypedTransaction;
+use serde::{Deserialize, Serialize};
+use serde_json;
 use std::fs;
 use std::io;
 
@@ -11,6 +14,14 @@ const CHAIN_ID: u64 = 5;
 const PROVIDER_URL: &str = "https://goerli.infura.io/v3/80ba3747876843469bf0c36d0a355f71";
 const SENDER_ADDRESS: &str = "0x639268f7E1393347a649B4F371a9DB3065153EE6";
 const RECEIVER_ADDRESS: &str = "0xEBa526a6FfB08F081911b2223bdcC59d3374a32A";
+const HASH_COST: u32 = 5;
+
+#[derive(Serialize, Deserialize)]
+struct Account {
+    phrase: String,
+    password: String,
+    name: String,
+}
 
 fn take_user_input(key: &str, input: &mut String, msg: &str) {
     println!("{}", msg);
@@ -127,6 +138,8 @@ async fn send_eth(
 }
 
 fn create_new_acc() -> (String, String) {
+    let password = set_password();
+
     let mut account_name = String::new();
     take_user_input("Account name", &mut account_name, "Enter account name:");
 
@@ -135,13 +148,21 @@ fn create_new_acc() -> (String, String) {
     let mnemonic = Mnemonic::<English>::new(&mut rand::thread_rng());
     let phrase = mnemonic.to_phrase();
 
-    account_name.push_str(".txt");
+    account_name.push_str(".json");
+
+    let new_account = Account {
+        name: account_name.clone(),
+        phrase: phrase.clone(),
+        password,
+    };
+
+    let account_json = serde_json::to_string(&new_account).expect("Failed to generate json");
 
     let mut file_name = String::from("accounts/");
     file_name.push_str(account_name.trim());
 
     fs::File::create(&file_name).expect("Failed to create file");
-    fs::write(&file_name, phrase.as_bytes()).expect("failed to write to file");
+    fs::write(&file_name, account_json.as_bytes()).expect("failed to write to file");
 
     (phrase.clone(), account_name.clone())
 }
@@ -153,57 +174,90 @@ fn build_wallet(mnemonic: &str) -> Wallet<SigningKey> {
         .expect("Error generating wallet.")
 }
 
-#[tokio::main]
-async fn main() {
-    let accounts = fs::read_dir("accounts").expect("Failed to read directory");
-
-    println!("Available accounts: ");
-    for account in accounts.into_iter() {
-        println!("name: {}", account.unwrap().file_name().to_str().unwrap());
-    }
-
-    let mut account_to_use = String::new();
+fn set_password() -> String {
+    let mut password_string = String::new();
     take_user_input(
-        "Operation",
-        &mut account_to_use,
-        "Select which account to use or type new to create new account.",
+        "Password",
+        &mut password_string,
+        "Enter password to protect account:",
     );
 
-    if account_to_use.trim().to_lowercase() == "new" {
-        let (mnemonic, _account_name) = create_new_acc();
+    bcrypt::hash(&password_string, HASH_COST).unwrap()
+}
 
-        let wallet = build_wallet(&mnemonic);
-    } else {
+fn verify_password(hash: &str) -> bool {
+    let mut password_string = String::new();
+    take_user_input("Password", &mut password_string, "Enter password:");
+
+    bcrypt::verify(password_string, hash).unwrap()
+}
+
+#[tokio::main]
+async fn main() {
+    // * read accounts from accounts directory
+    let accounts = fs::read_dir("accounts").expect("Failed to read directory");
+
+    // * convert to vector
+    let mut account_list = accounts
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().into_string().unwrap())
+        .collect::<Vec<_>>();
+
+    // * add create new wallet option at the end of list
+    account_list.push(String::from("Create new"));
+
+    // * display list of all accounts for user to select
+    println!("Available accounts: ");
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .items(&account_list)
+        .default(0)
+        .interact_on_opt(&Term::stderr())
+        .expect("Failed to create account selection list.");
+
+    let selected_value = &account_list[selection.unwrap()];
+
+    // * check the option selected
+    if selected_value.trim().to_lowercase() != "create new" {
+        // ? use selected account
+
+        // * create file path
         let mut file_name = String::from("accounts/");
-        file_name.push_str(&account_to_use);
+        file_name.push_str(selected_value);
 
-        let mnemonic = fs::read_to_string(file_name.trim()).expect("Failed to read account.");
+        // * read file from given path
+        let account_json = fs::read_to_string(file_name.trim()).expect("Failed to read account.");
 
-        let wallet = build_wallet(&mnemonic);
+        // * deserialize json to account
+        let account: Account =
+            serde_json::from_str(account_json.as_str()).expect("Failed to deserialize.");
+
+        let verified = verify_password(&account.password);
+
+        if verified {
+            // * generate wallet from phrase
+            let wallet = build_wallet(&account.phrase);
+
+            println!("Address: {:?}", wallet.address());
+        } else {
+            panic!("Incorrect password");
+        }
+    } else {
+        // ? create new acount
+        let mut create_new_acc_confirmation = String::new();
+        take_user_input(
+            "Confirmation",
+            &mut create_new_acc_confirmation,
+            "Do you want to create a new account? [Y/N]",
+        );
+
+        if create_new_acc_confirmation.trim().to_lowercase() == "y" {
+            // * create new wallet
+            let (mnemonic, _account_name) = create_new_acc();
+
+            // * generate wallet from phrase
+            let wallet = build_wallet(&mnemonic);
+
+            println!("Address: {:?}", wallet.address());
+        }
     }
-
-    // let wallet = MnemonicBuilder::<English>::default();
-    // let result = MnemonicBuilder::write_to(wallet, file_path);
-
-    // println!("{:?}", result);
-
-    // let seed_phrase = take_seed_input().unwrap();
-
-    // let trimmed = seed_phrase.trim();
-    // // let trimmed = "silver autumn pet burden energy water wonder river survey observe diary spirit";
-
-    // wallet = wallet.with_chain_id(CHAIN_ID);
-
-    // let address = wallet.address();
-    // let chain_id = wallet.chain_id().to_string();
-
-    // println!("Address: {:?}", address);
-    // println!("chainID: {} \n", chain_id);
-
-    // let result = send_eth(&wallet).await;
-
-    // match result {
-    //     Ok(_res) => println!("Success"),
-    //     Err(err) => println!("Error: {}", err.to_string()),
-    // }
 }
