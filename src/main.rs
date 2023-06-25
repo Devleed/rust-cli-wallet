@@ -2,12 +2,17 @@ use bcrypt;
 use dialoguer::{console::Term, theme::ColorfulTheme, Select};
 use ethers::prelude::k256::ecdsa::SigningKey;
 use ethers::prelude::*;
+use ethers::providers::Http;
+use ethers::providers::Provider;
 use ethers::signers::coins_bip39::{English, Mnemonic};
 use ethers::types::transaction::eip2718::TypedTransaction;
+// use serde::Serializer;
 use serde::{Deserialize, Serialize};
 use serde_json;
-use std::fs;
-use std::io;
+use serde_json::Deserializer;
+use serde_json::Serializer;
+use std::{fs, io, ops::Add};
+use web3_keystore;
 
 const SEED_PHRASE_LEN: usize = 12;
 const CHAIN_ID: u64 = 5;
@@ -52,26 +57,55 @@ fn take_seed_input() -> Option<String> {
     return Some(String::from(user_input));
 }
 
+fn get_provider() -> Provider<Http> {
+    Provider::<Http>::try_from(PROVIDER_URL).expect("Failed to connect to provider, try again.")
+}
+
+async fn fetch_balance(
+    address: H160,
+    provided_provider: &Provider<Http>,
+) -> Result<U256, Box<dyn std::error::Error>> {
+    let provider = provided_provider;
+
+    let balance = provider
+        .get_balance(address, None)
+        .await
+        .expect("Failed to fetch user balance");
+
+    println!("balance of {:?} is {} ETH", address, balance);
+
+    Ok(balance)
+}
+
+async fn fetch_gas_price(
+    provided_provider: &Provider<Http>,
+) -> Result<f64, Box<dyn std::error::Error>> {
+    let provider = provided_provider;
+    let gas_price = provider.get_gas_price().await?;
+
+    Ok(ethers::utils::format_units(gas_price, "ether")?.parse::<f64>()?)
+}
+
 async fn send_eth(
     wallet: &Wallet<SigningKey>,
 ) -> Result<Option<TransactionReceipt>, Box<dyn std::error::Error>> {
-    let provider = Provider::<Http>::try_from(PROVIDER_URL)?;
+    let provider = get_provider();
 
     let client = SignerMiddleware::new(provider.clone(), wallet.clone());
 
-    let address_from = SENDER_ADDRESS.parse::<Address>()?;
-    let address_to = RECEIVER_ADDRESS.parse::<Address>()?;
+    let address_from = wallet.address();
+    let mut address_to = String::new();
+    take_user_input("Sending to", &mut address_to, "Enter recipient address:");
 
-    let balance_from = provider.get_balance(address_from, None).await?;
-    let balance_to = provider.get_balance(address_to, None).await?;
+    let balance_from = fetch_balance(address_from, &provider).await?;
 
-    let gas_price = provider.get_gas_price().await?;
+    let gas_price = fetch_gas_price(&provider).await?;
 
-    let balance_from = ethers::utils::format_units(balance_from, "ether")?;
-    let balance_to = ethers::utils::format_units(balance_to, "ether")?;
+    let balance_from = ethers::utils::format_units(balance_from, "ether")?
+        .trim()
+        .parse::<f64>()?;
 
-    println!("{:?} has {} ETH", address_from, balance_from);
-    println!("{:?} has {} ETH", address_to, balance_to);
+    println!("Available balance: {}", balance_from);
 
     let mut value_str = String::new();
     take_user_input("value", &mut value_str, "\n\nEnter amount to send in ETH:");
@@ -79,7 +113,8 @@ async fn send_eth(
     while value_str
         .trim()
         .parse::<f64>()?
-        .ge(&balance_from.trim().parse::<f64>()?)
+        .add(gas_price)
+        .ge(&balance_from)
     {
         println!(
             "Amount limit exceeded, sender has {} ETH and you're trying to send {} ETH \n",
@@ -91,7 +126,7 @@ async fn send_eth(
     }
 
     let transaction_req: TypedTransaction = TransactionRequest::new()
-        .to(RECEIVER_ADDRESS)
+        .to(address_to.trim())
         .value(U256::from(ethers::utils::parse_ether(value_str.trim())?))
         .into();
 
@@ -100,8 +135,6 @@ async fn send_eth(
         .await?
         .to_string()
         .parse::<f64>()?;
-
-    let gas_price = ethers::utils::format_units(gas_price, "ether")?.parse::<f64>()?;
 
     let tx_cost = gas_price * estimated_gas;
 
@@ -137,7 +170,7 @@ async fn send_eth(
     }
 }
 
-fn create_new_acc() -> (String, String) {
+fn create_new_acc(seed: Option<String>) -> (String, String) {
     let password = set_password();
 
     let mut account_name = String::new();
@@ -145,13 +178,17 @@ fn create_new_acc() -> (String, String) {
 
     account_name = String::from(account_name.trim());
 
-    let mnemonic = Mnemonic::<English>::new(&mut rand::thread_rng());
+    let mnemonic = if seed.is_some() {
+        Mnemonic::<English>::new_from_phrase(Some(seed).unwrap().unwrap().trim()).unwrap()
+    } else {
+        Mnemonic::<English>::new(&mut rand::thread_rng())
+    };
     let phrase = mnemonic.to_phrase();
 
     account_name.push_str(".json");
 
     let new_account = Account {
-        name: account_name.clone(),
+        name: account_name.clone().replace(".json", ""),
         phrase: phrase.clone(),
         password,
     };
@@ -192,8 +229,7 @@ fn verify_password(hash: &str) -> bool {
     bcrypt::verify(password_string, hash).unwrap()
 }
 
-#[tokio::main]
-async fn main() {
+async fn launch_app() {
     // * read accounts from accounts directory
     let accounts = fs::read_dir("accounts").expect("Failed to read directory");
 
@@ -205,6 +241,7 @@ async fn main() {
 
     // * add create new wallet option at the end of list
     account_list.push(String::from("Create new"));
+    account_list.push(String::from("Import account"));
 
     // * display list of all accounts for user to select
     println!("Available accounts: ");
@@ -214,10 +251,38 @@ async fn main() {
         .interact_on_opt(&Term::stderr())
         .expect("Failed to create account selection list.");
 
-    let selected_value = &account_list[selection.unwrap()];
+    let selected_value = &account_list[selection.unwrap()].trim().to_lowercase();
 
     // * check the option selected
-    if selected_value.trim().to_lowercase() != "create new" {
+    if selected_value == "create new" || selected_value == "import account" {
+        if selected_value == "import account" {
+            let seed_phrase = take_seed_input().unwrap();
+
+            let (mnemonic, _account_name) = create_new_acc(Some(seed_phrase));
+
+            let wallet = build_wallet(&mnemonic);
+
+            println!("Address: {:?}", wallet.address());
+        }
+
+        // ? create new acount
+        let mut create_new_acc_confirmation = String::new();
+        take_user_input(
+            "Confirmation",
+            &mut create_new_acc_confirmation,
+            "Do you want to create a new account? [Y/N]",
+        );
+
+        if create_new_acc_confirmation.trim().to_lowercase() == "y" {
+            // * create new wallet
+            let (mnemonic, _account_name) = create_new_acc(None);
+
+            // * generate wallet from phrase
+            let wallet = build_wallet(&mnemonic);
+
+            println!("Address: {:?}", wallet.address());
+        }
+    } else {
         // ? use selected account
 
         // * create file path
@@ -238,26 +303,76 @@ async fn main() {
             let wallet = build_wallet(&account.phrase);
 
             println!("Address: {:?}", wallet.address());
+
+            loop {
+                launch_authenticated_dashboard(&wallet).await;
+            }
         } else {
-            panic!("Incorrect password");
-        }
-    } else {
-        // ? create new acount
-        let mut create_new_acc_confirmation = String::new();
-        take_user_input(
-            "Confirmation",
-            &mut create_new_acc_confirmation,
-            "Do you want to create a new account? [Y/N]",
-        );
-
-        if create_new_acc_confirmation.trim().to_lowercase() == "y" {
-            // * create new wallet
-            let (mnemonic, _account_name) = create_new_acc();
-
-            // * generate wallet from phrase
-            let wallet = build_wallet(&mnemonic);
-
-            println!("Address: {:?}", wallet.address());
+            println!("Incorrect password");
         }
     }
+}
+
+async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) {
+    let items = vec!["Send eth"];
+    let actions = vec![send_eth];
+
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .items(&items)
+        .default(0)
+        .interact_on_opt(&Term::stderr())
+        .expect("Failed to create account selection list.");
+
+    let selected_action = actions[selection.unwrap()](wallet);
+    let res = selected_action.await.unwrap().unwrap();
+}
+
+async fn test() {
+    let mnemonic = Mnemonic::<English>::new_from_phrase(
+        "chief width ensure divide height rocket renew vacuum lawsuit link cross plunge",
+    )
+    .unwrap();
+
+    println!("mnemonic: {}", mnemonic.to_phrase());
+
+    let key = mnemonic
+        .derive_key("m/44'/60'/0'/0/0", None)
+        .expect("Failed to derive pkey");
+
+    let keystore = web3_keystore::encrypt(
+        &mut rand::thread_rng(),
+        mnemonic.to_phrase().as_bytes(),
+        "karachi12",
+        None,
+        None,
+    )
+    .unwrap();
+
+    let mut serializer = Serializer::new(Vec::new());
+
+    keystore.serialize(&mut serializer).unwrap();
+
+    let serialized_data = serializer.into_inner();
+    let json_string = String::from_utf8(serialized_data).unwrap();
+
+    println!("Serialized JSON: {}", json_string);
+
+    let mut deserializer = Deserializer::from_str(&json_string);
+
+    let ks = web3_keystore::KeyStore::deserialize(&mut deserializer).unwrap();
+
+    let data = web3_keystore::decrypt(&ks, "karachi123").expect("Wrong password");
+
+    let str_data = String::from_utf8(data).unwrap();
+
+    println!("data {}", str_data)
+}
+
+#[tokio::main]
+async fn main() {
+    test().await;
+
+    // loop {
+    //     launch_app().await;
+    // }
 }

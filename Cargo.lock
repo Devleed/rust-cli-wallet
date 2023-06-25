@@ -106,6 +106,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4c7f02d4ea65f2c1853089ffd8d2787bdbc63de2f0d29dedbcf8ccdfa0ccd4cf"
 
 [[package]]
+name = "base58"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6107fe1be6682a68940da878d9e9f5e90ca5745b3dec9fd1bb393c8777d4f581"
+
+[[package]]
 name = "base64"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1371,6 +1377,9 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "hmac"
@@ -2350,15 +2359,19 @@ dependencies = [
 name = "rust-basics"
 version = "0.1.0"
 dependencies = [
+ "base58",
  "bcrypt",
  "bip39",
+ "coins-bip32",
  "dialoguer",
  "ethers",
+ "hex",
  "password-hash 0.5.0",
  "rand",
  "serde",
  "serde_json",
  "tokio",
+ "web3-keystore",
 ]
 
 [[package]]
@@ -3268,6 +3281,28 @@ checksum = "9b85cbef8c220a6abc02aefd892dfc0fc23afb1c6a426316ec33253a3877249b"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "web3-keystore"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c8c917c0e3d4fc2bef16bad63f7e12b638eba68edf23f303513d07bf8cec149a"
+dependencies = [
+ "aes",
+ "ctr",
+ "digest 0.10.7",
+ "getrandom",
+ "hex",
+ "hmac",
+ "pbkdf2 0.11.0",
+ "rand",
+ "scrypt",
+ "serde",
+ "sha2 0.10.7",
+ "sha3",
+ "thiserror",
+ "uuid",
 ]
 
 [[package]]
