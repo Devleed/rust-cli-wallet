@@ -6,7 +6,6 @@ use ethers::providers::Http;
 use ethers::providers::Provider;
 use ethers::signers::coins_bip39::{English, Mnemonic};
 use ethers::types::transaction::eip2718::TypedTransaction;
-// use serde::Serializer;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Deserializer;
@@ -15,11 +14,9 @@ use std::{fs, io, ops::Add};
 use web3_keystore;
 
 const SEED_PHRASE_LEN: usize = 12;
+const PKEY_LEN: usize = 64;
 const CHAIN_ID: u64 = 5;
 const PROVIDER_URL: &str = "https://goerli.infura.io/v3/80ba3747876843469bf0c36d0a355f71";
-const SENDER_ADDRESS: &str = "0x639268f7E1393347a649B4F371a9DB3065153EE6";
-const RECEIVER_ADDRESS: &str = "0xEBa526a6FfB08F081911b2223bdcC59d3374a32A";
-const HASH_COST: u32 = 5;
 
 #[derive(Serialize, Deserialize)]
 struct Account {
@@ -37,24 +34,36 @@ fn take_user_input(key: &str, input: &mut String, msg: &str) {
     println!("\n{}: {}", key, input);
 }
 
-fn take_seed_input() -> Option<String> {
+fn take_secret_input() -> Option<String> {
     let mut user_input = String::new();
 
     take_user_input(
         "seed phrase",
         &mut user_input,
-        "\n\nEnter 12 word seed phrase:",
+        "\n\nEnter 12 word seed phrase or private key:",
     );
 
-    let count = user_input.split_whitespace().count();
+    let is_pkey = is_pkey(&user_input);
 
-    if count.ne(&SEED_PHRASE_LEN) {
-        println!("Invalid seed phrase");
+    if is_pkey {
+        let pkey = user_input.trim().replace("0x", "");
 
-        return None;
+        if pkey.len().ne(&PKEY_LEN) {
+            println!("Invalid private key");
+
+            return None;
+        }
+    } else {
+        let count = user_input.split_whitespace().count();
+
+        if count.ne(&SEED_PHRASE_LEN) {
+            println!("Invalid seed phrase");
+
+            return None;
+        }
     }
 
-    return Some(String::from(user_input));
+    return Some(String::from(user_input.trim()));
 }
 
 fn get_provider() -> Provider<Http> {
@@ -94,12 +103,12 @@ async fn send_eth(
     let client = SignerMiddleware::new(provider.clone(), wallet.clone());
 
     let address_from = wallet.address();
-    let mut address_to = String::new();
-    take_user_input("Sending to", &mut address_to, "Enter recipient address:");
 
-    let balance_from = fetch_balance(address_from, &provider).await?;
+    // let balance_from = fetch_balance(address_from, &provider).await?;
+    let balance_from: u128 = 10000000000000000000000000000000000;
 
-    let gas_price = fetch_gas_price(&provider).await?;
+    // let gas_price = fetch_gas_price(&provider).await?;
+    let gas_price = 0.00002;
 
     let balance_from = ethers::utils::format_units(balance_from, "ether")?
         .trim()
@@ -107,15 +116,13 @@ async fn send_eth(
 
     println!("Available balance: {}", balance_from);
 
+    let mut address_to = String::new();
+    take_user_input("Sending to", &mut address_to, "Enter recipient address:");
+
     let mut value_str = String::new();
     take_user_input("value", &mut value_str, "\n\nEnter amount to send in ETH:");
 
-    while value_str
-        .trim()
-        .parse::<f64>()?
-        .add(gas_price)
-        .ge(&balance_from)
-    {
+    while value_str.trim().parse::<f64>()?.ge(&balance_from) {
         println!(
             "Amount limit exceeded, sender has {} ETH and you're trying to send {} ETH \n",
             balance_from,
@@ -170,48 +177,30 @@ async fn send_eth(
     }
 }
 
-fn create_new_acc(seed: Option<String>) -> (String, String) {
-    let password = set_password();
+fn serialize_keystore(keystore: &web3_keystore::KeyStore) -> String {
+    let mut serializer = Serializer::new(Vec::new());
 
-    let mut account_name = String::new();
-    take_user_input("Account name", &mut account_name, "Enter account name:");
+    keystore.serialize(&mut serializer).unwrap();
 
-    account_name = String::from(account_name.trim());
-
-    let mnemonic = if seed.is_some() {
-        Mnemonic::<English>::new_from_phrase(Some(seed).unwrap().unwrap().trim()).unwrap()
-    } else {
-        Mnemonic::<English>::new(&mut rand::thread_rng())
-    };
-    let phrase = mnemonic.to_phrase();
-
-    account_name.push_str(".json");
-
-    let new_account = Account {
-        name: account_name.clone().replace(".json", ""),
-        phrase: phrase.clone(),
-        password,
-    };
-
-    let account_json = serde_json::to_string(&new_account).expect("Failed to generate json");
-
-    let mut file_name = String::from("accounts/");
-    file_name.push_str(account_name.trim());
-
-    fs::File::create(&file_name).expect("Failed to create file");
-    fs::write(&file_name, account_json.as_bytes()).expect("failed to write to file");
-
-    (phrase.clone(), account_name.clone())
+    let serialized_data = serializer.into_inner();
+    String::from_utf8(serialized_data).unwrap()
 }
 
-fn build_wallet(mnemonic: &str) -> Wallet<SigningKey> {
-    MnemonicBuilder::<English>::default()
-        .phrase(mnemonic)
-        .build()
-        .expect("Error generating wallet.")
+fn deserialize_keystore(json_string: &str, password: &str) -> String {
+    let mut deserializer = Deserializer::from_str(json_string);
+
+    let keystore = web3_keystore::KeyStore::deserialize(&mut deserializer).unwrap();
+
+    let data = web3_keystore::decrypt(&keystore, password).expect("Wrong password");
+
+    String::from_utf8(data).unwrap()
 }
 
-fn set_password() -> String {
+fn is_pkey(secret: &str) -> bool {
+    !secret.trim().contains(" ")
+}
+
+fn create_new_acc(secret: Option<String>) -> (String, String) {
     let mut password_string = String::new();
     take_user_input(
         "Password",
@@ -219,14 +208,80 @@ fn set_password() -> String {
         "Enter password to protect account:",
     );
 
-    bcrypt::hash(&password_string, HASH_COST).unwrap()
+    let mut account_name = String::new();
+    take_user_input("Account name", &mut account_name, "Enter account name:");
+
+    account_name = String::from(account_name.trim());
+
+    let account_key = if secret.is_some() {
+        Some(secret).unwrap().unwrap()
+    } else {
+        Mnemonic::<English>::new(&mut rand::thread_rng()).to_phrase()
+    };
+
+    account_name.push_str(".json");
+
+    let keystore = web3_keystore::encrypt(
+        &mut rand::thread_rng(),
+        &account_key,
+        password_string.trim(),
+        None,
+        Some(account_name.clone()),
+    )
+    .unwrap();
+
+    let account_json = serialize_keystore(&keystore);
+
+    let mut file_name = String::from("accounts/");
+    file_name.push_str(account_name.trim());
+
+    fs::File::create(&file_name).expect("Failed to create file");
+    fs::write(&file_name, account_json.as_bytes()).expect("failed to write to file");
+
+    (account_key.clone(), account_name.clone())
 }
 
-fn verify_password(hash: &str) -> bool {
-    let mut password_string = String::new();
-    take_user_input("Password", &mut password_string, "Enter password:");
+fn build_wallet(account_key: &str) -> Wallet<SigningKey> {
+    if is_pkey(account_key) {
+        account_key
+            .parse::<LocalWallet>()
+            .expect("Error generating wallet from pkey")
+    } else {
+        MnemonicBuilder::<English>::default()
+            .phrase(account_key)
+            .build()
+            .expect("Error generating wallet from seed phrase")
+    }
+}
 
-    bcrypt::verify(password_string, hash).unwrap()
+fn create_or_import_wallet(create_new: bool) {
+    if !create_new {
+        let secret = take_secret_input().unwrap();
+
+        let (account_key, _account_name) = create_new_acc(Some(secret));
+
+        let wallet = build_wallet(&account_key);
+
+        println!("Address: {:?}", wallet.address());
+    } else {
+        // ? create new acount
+        let mut create_new_acc_confirmation = String::new();
+        take_user_input(
+            "Confirmation",
+            &mut create_new_acc_confirmation,
+            "Do you want to create a new wallet? [Y/N]",
+        );
+
+        if create_new_acc_confirmation.trim().to_lowercase() == "y" {
+            // * create new wallet
+            let (account_key, _account_name) = create_new_acc(None);
+
+            // * generate wallet from phrase
+            let wallet = build_wallet(&account_key);
+
+            println!("Address: {:?}", wallet.address());
+        }
+    }
 }
 
 async fn launch_app() {
@@ -241,7 +296,7 @@ async fn launch_app() {
 
     // * add create new wallet option at the end of list
     account_list.push(String::from("Create new"));
-    account_list.push(String::from("Import account"));
+    account_list.push(String::from("Import wallet"));
 
     // * display list of all accounts for user to select
     println!("Available accounts: ");
@@ -254,34 +309,8 @@ async fn launch_app() {
     let selected_value = &account_list[selection.unwrap()].trim().to_lowercase();
 
     // * check the option selected
-    if selected_value == "create new" || selected_value == "import account" {
-        if selected_value == "import account" {
-            let seed_phrase = take_seed_input().unwrap();
-
-            let (mnemonic, _account_name) = create_new_acc(Some(seed_phrase));
-
-            let wallet = build_wallet(&mnemonic);
-
-            println!("Address: {:?}", wallet.address());
-        }
-
-        // ? create new acount
-        let mut create_new_acc_confirmation = String::new();
-        take_user_input(
-            "Confirmation",
-            &mut create_new_acc_confirmation,
-            "Do you want to create a new account? [Y/N]",
-        );
-
-        if create_new_acc_confirmation.trim().to_lowercase() == "y" {
-            // * create new wallet
-            let (mnemonic, _account_name) = create_new_acc(None);
-
-            // * generate wallet from phrase
-            let wallet = build_wallet(&mnemonic);
-
-            println!("Address: {:?}", wallet.address());
-        }
+    if selected_value == "create new" || selected_value == "import wallet" {
+        create_or_import_wallet(selected_value == "create new");
     } else {
         // ? use selected account
 
@@ -292,23 +321,18 @@ async fn launch_app() {
         // * read file from given path
         let account_json = fs::read_to_string(file_name.trim()).expect("Failed to read account.");
 
-        // * deserialize json to account
-        let account: Account =
-            serde_json::from_str(account_json.as_str()).expect("Failed to deserialize.");
+        let mut password_string = String::new();
+        take_user_input("Password", &mut password_string, "Enter password:");
 
-        let verified = verify_password(&account.password);
+        let secret_key = deserialize_keystore(&account_json, password_string.trim());
 
-        if verified {
-            // * generate wallet from phrase
-            let wallet = build_wallet(&account.phrase);
+        // * generate wallet from phrase
+        let wallet = build_wallet(secret_key.trim());
 
-            println!("Address: {:?}", wallet.address());
+        println!("Address: {:?}", wallet.address());
 
-            loop {
-                launch_authenticated_dashboard(&wallet).await;
-            }
-        } else {
-            println!("Incorrect password");
+        loop {
+            launch_authenticated_dashboard(&wallet).await;
         }
     }
 }
@@ -328,16 +352,36 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) {
 }
 
 async fn test() {
+    /*
+     - create new wallet (build and encrypt mnemonic)
+     - import wallet (encrypt mnemonic)
+     - import account (encrypt pkey)
+     - select account (mnemonic | pkey)
+    */
+
     let mnemonic = Mnemonic::<English>::new_from_phrase(
         "chief width ensure divide height rocket renew vacuum lawsuit link cross plunge",
     )
     .unwrap();
 
-    println!("mnemonic: {}", mnemonic.to_phrase());
+    let wallet = build_wallet(&mnemonic.to_phrase());
+    // let serialized_wallet = serde_json::to_string(&wallet);
 
-    let key = mnemonic
-        .derive_key("m/44'/60'/0'/0/0", None)
-        .expect("Failed to derive pkey");
+    // println!("mnemonic: {}", mnemonic.to_phrase());
+
+    // let key = mnemonic
+    //     .derive_key("m/44'/60'/0'/0/0", None)
+    //     .expect("Failed to derive pkey");
+
+    // let ser_key = serde_json::to_string(&key).unwrap();
+
+    // println!("ser_key ser_key {}", ser_key);
+
+    // let test_key: XPriv = serde_json::from_str(&ser_key).unwrap();
+
+    // println!("key {:?}", test_key);
+
+    // test_key.fingerprint();
 
     let keystore = web3_keystore::encrypt(
         &mut rand::thread_rng(),
@@ -361,7 +405,7 @@ async fn test() {
 
     let ks = web3_keystore::KeyStore::deserialize(&mut deserializer).unwrap();
 
-    let data = web3_keystore::decrypt(&ks, "karachi123").expect("Wrong password");
+    let data = web3_keystore::decrypt(&ks, "karachi12").expect("Wrong password");
 
     let str_data = String::from_utf8(data).unwrap();
 
@@ -370,9 +414,9 @@ async fn test() {
 
 #[tokio::main]
 async fn main() {
-    test().await;
+    // test().await;
 
-    // loop {
-    //     launch_app().await;
-    // }
+    loop {
+        launch_app().await;
+    }
 }
