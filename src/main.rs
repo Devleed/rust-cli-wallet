@@ -1,29 +1,22 @@
-use bcrypt;
 use dialoguer::{console::Term, theme::ColorfulTheme, Select};
 use ethers::prelude::k256::ecdsa::SigningKey;
 use ethers::prelude::*;
-use ethers::providers::Http;
-use ethers::providers::Provider;
 use ethers::signers::coins_bip39::{English, Mnemonic};
 use ethers::types::transaction::eip2718::TypedTransaction;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Deserializer;
 use serde_json::Serializer;
-use std::{fs, io, ops::Add};
+use std::vec;
+use std::{fs, io};
 use web3_keystore;
+
+mod networks;
+mod provider;
 
 const SEED_PHRASE_LEN: usize = 12;
 const PKEY_LEN: usize = 64;
 const CHAIN_ID: u64 = 5;
-const PROVIDER_URL: &str = "https://goerli.infura.io/v3/80ba3747876843469bf0c36d0a355f71";
-
-#[derive(Serialize, Deserialize)]
-struct Account {
-    phrase: String,
-    password: String,
-    name: String,
-}
 
 fn take_user_input(key: &str, input: &mut String, msg: &str) {
     println!("{}", msg);
@@ -66,53 +59,20 @@ fn take_secret_input() -> Option<String> {
     return Some(String::from(user_input.trim()));
 }
 
-fn get_provider() -> Provider<Http> {
-    Provider::<Http>::try_from(PROVIDER_URL).expect("Failed to connect to provider, try again.")
-}
-
-async fn fetch_balance(
-    address: H160,
-    provided_provider: &Provider<Http>,
-) -> Result<U256, Box<dyn std::error::Error>> {
-    let provider = provided_provider;
-
-    let balance = provider
-        .get_balance(address, None)
-        .await
-        .expect("Failed to fetch user balance");
-
-    println!("balance of {:?} is {} ETH", address, balance);
-
-    Ok(balance)
-}
-
-async fn fetch_gas_price(
-    provided_provider: &Provider<Http>,
-) -> Result<f64, Box<dyn std::error::Error>> {
-    let provider = provided_provider;
-    let gas_price = provider.get_gas_price().await?;
-
-    Ok(ethers::utils::format_units(gas_price, "ether")?.parse::<f64>()?)
-}
-
 async fn send_eth(
     wallet: &Wallet<SigningKey>,
 ) -> Result<Option<TransactionReceipt>, Box<dyn std::error::Error>> {
-    let provider = get_provider();
+    let provider = provider::get_provider();
 
     let client = SignerMiddleware::new(provider.clone(), wallet.clone());
 
     let address_from = wallet.address();
 
-    // let balance_from = fetch_balance(address_from, &provider).await?;
-    let balance_from: u128 = 10000000000000000000000000000000000;
+    let balance_from = provider::fetch_balance(address_from).await?;
+    // let balance_from: u128 = 10000000000000000000000000000000000;
 
-    // let gas_price = fetch_gas_price(&provider).await?;
-    let gas_price = 0.00002;
-
-    let balance_from = ethers::utils::format_units(balance_from, "ether")?
-        .trim()
-        .parse::<f64>()?;
+    let gas_price = provider::fetch_gas_price().await?;
+    // let gas_price = 0.00002;
 
     println!("Available balance: {}", balance_from);
 
@@ -133,6 +93,7 @@ async fn send_eth(
     }
 
     let transaction_req: TypedTransaction = TransactionRequest::new()
+        .from(address_from)
         .to(address_to.trim())
         .value(U256::from(ethers::utils::parse_ether(value_str.trim())?))
         .into();
@@ -151,7 +112,7 @@ async fn send_eth(
         "\nSending {} ETH from {:?} to {:?}\n",
         value_str.trim(),
         address_from,
-        address_to
+        address_to.trim()
     );
 
     let mut tx_confirmation = String::new();
@@ -246,11 +207,13 @@ fn build_wallet(account_key: &str) -> Wallet<SigningKey> {
         account_key
             .parse::<LocalWallet>()
             .expect("Error generating wallet from pkey")
+            .with_chain_id(CHAIN_ID)
     } else {
         MnemonicBuilder::<English>::default()
             .phrase(account_key)
             .build()
             .expect("Error generating wallet from seed phrase")
+            .with_chain_id(CHAIN_ID)
     }
 }
 
@@ -337,9 +300,28 @@ async fn launch_app() {
     }
 }
 
+fn change_network_request() {
+    let available_networks = networks::get_networks();
+    let (chain_ids, network_names): (Vec<&u8>, Vec<&&str>) = (
+        available_networks.keys().collect(),
+        available_networks.values().collect(),
+    );
+
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .items(&network_names)
+        .default(0)
+        .interact_on_opt(&Term::stderr())
+        .expect("Failed to create network selection list.");
+
+    let selected_network = chain_ids[selection.unwrap()];
+
+    networks::set_network(*selected_network);
+
+    println!("Switched to network: {}", network_names[selection.unwrap()]);
+}
+
 async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) {
-    let items = vec!["Send eth"];
-    let actions = vec![send_eth];
+    let items = vec!["Send eth", "Change network", "Display balance"];
 
     let selection = Select::with_theme(&ColorfulTheme::default())
         .items(&items)
@@ -347,69 +329,16 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) {
         .interact_on_opt(&Term::stderr())
         .expect("Failed to create account selection list.");
 
-    let selected_action = actions[selection.unwrap()](wallet);
-    let res = selected_action.await.unwrap().unwrap();
-}
+    let selected_action = selection.unwrap();
 
-async fn test() {
-    /*
-     - create new wallet (build and encrypt mnemonic)
-     - import wallet (encrypt mnemonic)
-     - import account (encrypt pkey)
-     - select account (mnemonic | pkey)
-    */
-
-    let mnemonic = Mnemonic::<English>::new_from_phrase(
-        "chief width ensure divide height rocket renew vacuum lawsuit link cross plunge",
-    )
-    .unwrap();
-
-    let wallet = build_wallet(&mnemonic.to_phrase());
-    // let serialized_wallet = serde_json::to_string(&wallet);
-
-    // println!("mnemonic: {}", mnemonic.to_phrase());
-
-    // let key = mnemonic
-    //     .derive_key("m/44'/60'/0'/0/0", None)
-    //     .expect("Failed to derive pkey");
-
-    // let ser_key = serde_json::to_string(&key).unwrap();
-
-    // println!("ser_key ser_key {}", ser_key);
-
-    // let test_key: XPriv = serde_json::from_str(&ser_key).unwrap();
-
-    // println!("key {:?}", test_key);
-
-    // test_key.fingerprint();
-
-    let keystore = web3_keystore::encrypt(
-        &mut rand::thread_rng(),
-        mnemonic.to_phrase().as_bytes(),
-        "karachi12",
-        None,
-        None,
-    )
-    .unwrap();
-
-    let mut serializer = Serializer::new(Vec::new());
-
-    keystore.serialize(&mut serializer).unwrap();
-
-    let serialized_data = serializer.into_inner();
-    let json_string = String::from_utf8(serialized_data).unwrap();
-
-    println!("Serialized JSON: {}", json_string);
-
-    let mut deserializer = Deserializer::from_str(&json_string);
-
-    let ks = web3_keystore::KeyStore::deserialize(&mut deserializer).unwrap();
-
-    let data = web3_keystore::decrypt(&ks, "karachi12").expect("Wrong password");
-
-    let str_data = String::from_utf8(data).unwrap();
-
-    println!("data {}", str_data)
+    if selected_action == 0 {
+        send_eth(wallet).await.unwrap();
+    } else if selected_action == 1 {
+        change_network_request();
+    } else if selected_action == 2 {
+        let balance = provider::fetch_balance(wallet.address()).await.unwrap();
+        println!("balance: {} ETH", balance)
+    }
 }
 
 #[tokio::main]
