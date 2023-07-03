@@ -10,6 +10,7 @@ mod keystore;
 mod networks;
 mod provider;
 mod utils;
+mod wallet;
 
 const SEED_PHRASE_LEN: usize = 12;
 const PKEY_LEN: usize = 64;
