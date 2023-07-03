@@ -1,0 +1,10 @@
+{
+  "1": {
+    "name": "mainnet",
+    "url": "https://mainnet.infura.io/v3/80ba3747876843469bf0c36d0a355f71"
+  },
+  "5": {
+    "name": "goerli",
+    "url": "https://goerli.infura.io/v3/80ba3747876843469bf0c36d0a355f71"
+  }
+}

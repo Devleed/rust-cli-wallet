@@ -301,11 +301,7 @@ async fn launch_app() {
 }
 
 fn change_network_request() {
-    let available_networks = networks::get_networks();
-    let (chain_ids, network_names): (Vec<&u8>, Vec<&&str>) = (
-        available_networks.keys().collect(),
-        available_networks.values().collect(),
-    );
+    let (chain_ids, network_names) = (networks::get_chain_ids(), networks::get_chain_names());
 
     let selection = Select::with_theme(&ColorfulTheme::default())
         .items(&network_names)
@@ -313,9 +309,9 @@ fn change_network_request() {
         .interact_on_opt(&Term::stderr())
         .expect("Failed to create network selection list.");
 
-    let selected_network = chain_ids[selection.unwrap()];
+    let selected_network = chain_ids[selection.unwrap()].clone();
 
-    networks::set_network(*selected_network);
+    networks::set_network(selected_network);
 
     println!("Switched to network: {}", network_names[selection.unwrap()]);
 }
@@ -343,8 +339,6 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) {
 
 #[tokio::main]
 async fn main() {
-    // test().await;
-
     loop {
         launch_app().await;
     }
