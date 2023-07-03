@@ -1,3 +1,6 @@
+use dialoguer::console::Term;
+use dialoguer::theme::ColorfulTheme;
+use dialoguer::Select;
 use lazy_static::lazy_static;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -32,30 +35,33 @@ pub fn set_network(value: u8) {
     provider::set_provider(NETWORKS.get(&value).unwrap().url.trim());
 }
 
-pub fn get_network_url() -> String {
-    let data = SELECTED_NETWORK.try_lock().expect("Failed to access val");
-
-    NETWORKS.get(&*data).unwrap().url.clone()
-}
-
 pub fn get_network_url_by_chain_id(chain_id: &u8) -> &'static str {
     NETWORKS.get(chain_id).unwrap().url.as_str()
 }
 
-pub fn get_chain_ids() -> Vec<&'static u8> {
+fn get_chain_ids() -> Vec<&'static u8> {
     NETWORKS.keys().collect()
 }
 
-pub fn get_chain_names() -> Vec<String> {
+fn get_chain_names() -> Vec<String> {
     NETWORKS
         .values()
         .map(|network| network.name.clone())
         .collect()
 }
 
-pub fn get_chain_urls() -> Vec<String> {
-    NETWORKS
-        .values()
-        .map(|network| network.url.clone())
-        .collect()
+pub fn change_network_request() {
+    let (chain_ids, network_names) = (get_chain_ids(), get_chain_names());
+
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .items(&network_names)
+        .default(0)
+        .interact_on_opt(&Term::stderr())
+        .expect("Failed to create network selection list.");
+
+    let selected_network = chain_ids[selection.unwrap()].clone();
+
+    set_network(selected_network);
+
+    println!("Switched to network: {}", network_names[selection.unwrap()]);
 }

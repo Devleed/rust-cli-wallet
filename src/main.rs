@@ -3,40 +3,28 @@ use ethers::prelude::k256::ecdsa::SigningKey;
 use ethers::prelude::*;
 use ethers::signers::coins_bip39::{English, Mnemonic};
 use ethers::types::transaction::eip2718::TypedTransaction;
-use serde::{Deserialize, Serialize};
-use serde_json;
-use serde_json::Deserializer;
-use serde_json::Serializer;
-use std::vec;
-use std::{fs, io};
+use std::{fs, vec};
 use web3_keystore;
 
+mod keystore;
 mod networks;
 mod provider;
+mod utils;
 
 const SEED_PHRASE_LEN: usize = 12;
 const PKEY_LEN: usize = 64;
 const CHAIN_ID: u64 = 5;
 
-fn take_user_input(key: &str, input: &mut String, msg: &str) {
-    println!("{}", msg);
-    io::stdin()
-        .read_line(input)
-        .expect("Failed to take user input.");
-
-    println!("\n{}: {}", key, input);
-}
-
 fn take_secret_input() -> Option<String> {
     let mut user_input = String::new();
 
-    take_user_input(
+    utils::take_user_input(
         "seed phrase",
         &mut user_input,
         "\n\nEnter 12 word seed phrase or private key:",
     );
 
-    let is_pkey = is_pkey(&user_input);
+    let is_pkey = utils::is_pkey(&user_input);
 
     if is_pkey {
         let pkey = user_input.trim().replace("0x", "");
@@ -77,10 +65,10 @@ async fn send_eth(
     println!("Available balance: {}", balance_from);
 
     let mut address_to = String::new();
-    take_user_input("Sending to", &mut address_to, "Enter recipient address:");
+    utils::take_user_input("Sending to", &mut address_to, "Enter recipient address:");
 
     let mut value_str = String::new();
-    take_user_input("value", &mut value_str, "\n\nEnter amount to send in ETH:");
+    utils::take_user_input("value", &mut value_str, "\n\nEnter amount to send in ETH:");
 
     while value_str.trim().parse::<f64>()?.ge(&balance_from) {
         println!(
@@ -89,7 +77,7 @@ async fn send_eth(
             value_str.trim()
         );
         value_str = String::new();
-        take_user_input("value", &mut value_str, "Enter amount to send in ETH:");
+        utils::take_user_input("value", &mut value_str, "Enter amount to send in ETH:");
     }
 
     let transaction_req: TypedTransaction = TransactionRequest::new()
@@ -116,7 +104,7 @@ async fn send_eth(
     );
 
     let mut tx_confirmation = String::new();
-    take_user_input(
+    utils::take_user_input(
         "confirmation",
         &mut tx_confirmation,
         "Are you sure you want to perform this transaction? [Y/N]",
@@ -138,39 +126,16 @@ async fn send_eth(
     }
 }
 
-fn serialize_keystore(keystore: &web3_keystore::KeyStore) -> String {
-    let mut serializer = Serializer::new(Vec::new());
-
-    keystore.serialize(&mut serializer).unwrap();
-
-    let serialized_data = serializer.into_inner();
-    String::from_utf8(serialized_data).unwrap()
-}
-
-fn deserialize_keystore(json_string: &str, password: &str) -> String {
-    let mut deserializer = Deserializer::from_str(json_string);
-
-    let keystore = web3_keystore::KeyStore::deserialize(&mut deserializer).unwrap();
-
-    let data = web3_keystore::decrypt(&keystore, password).expect("Wrong password");
-
-    String::from_utf8(data).unwrap()
-}
-
-fn is_pkey(secret: &str) -> bool {
-    !secret.trim().contains(" ")
-}
-
 fn create_new_acc(secret: Option<String>) -> (String, String) {
     let mut password_string = String::new();
-    take_user_input(
+    utils::take_user_input(
         "Password",
         &mut password_string,
         "Enter password to protect account:",
     );
 
     let mut account_name = String::new();
-    take_user_input("Account name", &mut account_name, "Enter account name:");
+    utils::take_user_input("Account name", &mut account_name, "Enter account name:");
 
     account_name = String::from(account_name.trim());
 
@@ -191,7 +156,7 @@ fn create_new_acc(secret: Option<String>) -> (String, String) {
     )
     .unwrap();
 
-    let account_json = serialize_keystore(&keystore);
+    let account_json = keystore::serialize_keystore(&keystore);
 
     let mut file_name = String::from("accounts/");
     file_name.push_str(account_name.trim());
@@ -203,7 +168,7 @@ fn create_new_acc(secret: Option<String>) -> (String, String) {
 }
 
 fn build_wallet(account_key: &str) -> Wallet<SigningKey> {
-    if is_pkey(account_key) {
+    if utils::is_pkey(account_key) {
         account_key
             .parse::<LocalWallet>()
             .expect("Error generating wallet from pkey")
@@ -229,7 +194,7 @@ fn create_or_import_wallet(create_new: bool) {
     } else {
         // ? create new acount
         let mut create_new_acc_confirmation = String::new();
-        take_user_input(
+        utils::take_user_input(
             "Confirmation",
             &mut create_new_acc_confirmation,
             "Do you want to create a new wallet? [Y/N]",
@@ -285,9 +250,9 @@ async fn launch_app() {
         let account_json = fs::read_to_string(file_name.trim()).expect("Failed to read account.");
 
         let mut password_string = String::new();
-        take_user_input("Password", &mut password_string, "Enter password:");
+        utils::take_user_input("Password", &mut password_string, "Enter password:");
 
-        let secret_key = deserialize_keystore(&account_json, password_string.trim());
+        let secret_key = keystore::deserialize_keystore(&account_json, password_string.trim());
 
         // * generate wallet from phrase
         let wallet = build_wallet(secret_key.trim());
@@ -298,22 +263,6 @@ async fn launch_app() {
             launch_authenticated_dashboard(&wallet).await;
         }
     }
-}
-
-fn change_network_request() {
-    let (chain_ids, network_names) = (networks::get_chain_ids(), networks::get_chain_names());
-
-    let selection = Select::with_theme(&ColorfulTheme::default())
-        .items(&network_names)
-        .default(0)
-        .interact_on_opt(&Term::stderr())
-        .expect("Failed to create network selection list.");
-
-    let selected_network = chain_ids[selection.unwrap()].clone();
-
-    networks::set_network(selected_network);
-
-    println!("Switched to network: {}", network_names[selection.unwrap()]);
 }
 
 async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) {
@@ -330,7 +279,7 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) {
     if selected_action == 0 {
         send_eth(wallet).await.unwrap();
     } else if selected_action == 1 {
-        change_network_request();
+        networks::change_network_request();
     } else if selected_action == 2 {
         let balance = provider::fetch_balance(wallet.address()).await.unwrap();
         println!("balance: {} ETH", balance)
