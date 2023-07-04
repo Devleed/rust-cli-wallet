@@ -1,52 +1,14 @@
 use dialoguer::{console::Term, theme::ColorfulTheme, Select};
 use ethers::prelude::k256::ecdsa::SigningKey;
 use ethers::prelude::*;
-use ethers::signers::coins_bip39::{English, Mnemonic};
 use ethers::types::transaction::eip2718::TypedTransaction;
 use std::{fs, vec};
-use web3_keystore;
 
 mod keystore;
 mod networks;
 mod provider;
 mod utils;
 mod wallet;
-
-const SEED_PHRASE_LEN: usize = 12;
-const PKEY_LEN: usize = 64;
-const CHAIN_ID: u64 = 5;
-
-fn take_secret_input() -> Option<String> {
-    let mut user_input = String::new();
-
-    utils::take_user_input(
-        "seed phrase",
-        &mut user_input,
-        "\n\nEnter 12 word seed phrase or private key:",
-    );
-
-    let is_pkey = utils::is_pkey(&user_input);
-
-    if is_pkey {
-        let pkey = user_input.trim().replace("0x", "");
-
-        if pkey.len().ne(&PKEY_LEN) {
-            println!("Invalid private key");
-
-            return None;
-        }
-    } else {
-        let count = user_input.split_whitespace().count();
-
-        if count.ne(&SEED_PHRASE_LEN) {
-            println!("Invalid seed phrase");
-
-            return None;
-        }
-    }
-
-    return Some(String::from(user_input.trim()));
-}
 
 async fn send_eth(
     wallet: &Wallet<SigningKey>,
@@ -127,89 +89,11 @@ async fn send_eth(
     }
 }
 
-fn create_new_acc(secret: Option<String>) -> (String, String) {
-    let mut password_string = String::new();
-    utils::take_user_input(
-        "Password",
-        &mut password_string,
-        "Enter password to protect account:",
-    );
-
-    let mut account_name = String::new();
-    utils::take_user_input("Account name", &mut account_name, "Enter account name:");
-
-    account_name = String::from(account_name.trim());
-
-    let account_key = if secret.is_some() {
-        Some(secret).unwrap().unwrap()
-    } else {
-        Mnemonic::<English>::new(&mut rand::thread_rng()).to_phrase()
-    };
-
-    account_name.push_str(".json");
-
-    let keystore = web3_keystore::encrypt(
-        &mut rand::thread_rng(),
-        &account_key,
-        password_string.trim(),
-        None,
-        Some(account_name.clone()),
-    )
-    .unwrap();
-
-    let account_json = keystore::serialize_keystore(&keystore);
-
-    let mut file_name = String::from("accounts/");
-    file_name.push_str(account_name.trim());
-
-    fs::File::create(&file_name).expect("Failed to create file");
-    fs::write(&file_name, account_json.as_bytes()).expect("failed to write to file");
-
-    (account_key.clone(), account_name.clone())
-}
-
-fn build_wallet(account_key: &str) -> Wallet<SigningKey> {
-    if utils::is_pkey(account_key) {
-        account_key
-            .parse::<LocalWallet>()
-            .expect("Error generating wallet from pkey")
-            .with_chain_id(CHAIN_ID)
-    } else {
-        MnemonicBuilder::<English>::default()
-            .phrase(account_key)
-            .build()
-            .expect("Error generating wallet from seed phrase")
-            .with_chain_id(CHAIN_ID)
-    }
-}
-
 fn create_or_import_wallet(create_new: bool) {
     if !create_new {
-        let secret = take_secret_input().unwrap();
-
-        let (account_key, _account_name) = create_new_acc(Some(secret));
-
-        let wallet = build_wallet(&account_key);
-
-        println!("Address: {:?}", wallet.address());
+        wallet::import_wallet();
     } else {
-        // ? create new acount
-        let mut create_new_acc_confirmation = String::new();
-        utils::take_user_input(
-            "Confirmation",
-            &mut create_new_acc_confirmation,
-            "Do you want to create a new wallet? [Y/N]",
-        );
-
-        if create_new_acc_confirmation.trim().to_lowercase() == "y" {
-            // * create new wallet
-            let (account_key, _account_name) = create_new_acc(None);
-
-            // * generate wallet from phrase
-            let wallet = build_wallet(&account_key);
-
-            println!("Address: {:?}", wallet.address());
-        }
+        wallet::create_wallet();
     }
 }
 
@@ -243,25 +127,17 @@ async fn launch_app() {
     } else {
         // ? use selected account
 
-        // * create file path
-        let mut file_name = String::from("accounts/");
-        file_name.push_str(selected_value);
+        wallet::select_wallet(&selected_value);
+        let wallet = wallet::get_wallet();
 
-        // * read file from given path
-        let account_json = fs::read_to_string(file_name.trim()).expect("Failed to read account.");
+        if wallet.is_some() {
+            let wallet = wallet.unwrap();
 
-        let mut password_string = String::new();
-        utils::take_user_input("Password", &mut password_string, "Enter password:");
+            println!("wallet: {:?}", wallet.address());
 
-        let secret_key = keystore::deserialize_keystore(&account_json, password_string.trim());
-
-        // * generate wallet from phrase
-        let wallet = build_wallet(secret_key.trim());
-
-        println!("Address: {:?}", wallet.address());
-
-        loop {
-            launch_authenticated_dashboard(&wallet).await;
+            loop {
+                launch_authenticated_dashboard(&wallet).await;
+            }
         }
     }
 }
