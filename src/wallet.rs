@@ -19,7 +19,7 @@ pub fn import_wallet() {
 
     let (account_key, _account_name) = create_new_acc(Some(secret));
 
-    build_wallet(&account_key);
+    build_wallet(&account_key, networks::get_selected_chain_id());
 }
 
 pub fn create_wallet() {
@@ -35,7 +35,7 @@ pub fn create_wallet() {
         let (account_key, _account_name) = create_new_acc(None);
 
         // * generate wallet from phrase
-        build_wallet(&account_key);
+        build_wallet(&account_key, networks::get_selected_chain_id());
     }
 }
 
@@ -55,12 +55,10 @@ pub fn select_wallet(acc_name: &str) {
     let mut data = ACCOUNT_KEY.lock().unwrap();
     *data = Some(secret_key.clone());
 
-    build_wallet(&secret_key);
+    build_wallet(&secret_key, networks::get_selected_chain_id());
 }
 
-pub fn build_wallet(account_key: &str) {
-    let chain_id = networks::get_selected_chain_id();
-
+pub fn build_wallet(account_key: &str, chain_id: u8) {
     let wallet = if utils::is_pkey(account_key) {
         account_key
             .parse::<LocalWallet>()
@@ -82,6 +80,12 @@ pub fn get_wallet() -> Option<Wallet<SigningKey>> {
     let wallet = WALLET.lock().unwrap();
 
     wallet.clone()
+}
+
+pub fn get_account_key() -> Option<String> {
+    let data = ACCOUNT_KEY.lock().expect("Failed to lock acc key");
+
+    data.clone()
 }
 
 /* Private functions */

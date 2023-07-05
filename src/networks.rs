@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::sync::Mutex;
 
-use crate::provider;
+use crate::{provider, wallet};
 
 pub const DEFAULT_SELECTED_CHAINID: u8 = 5;
 
@@ -33,6 +33,7 @@ pub fn set_network(value: u8) {
     *data = value;
 
     provider::set_provider(NETWORKS.get(&value).unwrap().url.trim());
+    wallet::build_wallet(&wallet::get_account_key().unwrap(), value);
 }
 
 pub fn get_network_url_by_chain_id(chain_id: &u8) -> &'static str {
