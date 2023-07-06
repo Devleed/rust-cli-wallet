@@ -1,13 +1,14 @@
-use std::{fs, sync::Mutex};
-
 use coins_bip32::prelude::SigningKey;
-use ethers::signers::{
-    coins_bip39::{English, Mnemonic},
-    LocalWallet, MnemonicBuilder, Signer, Wallet,
+use ethers::prelude::*;
+use ethers::{
+    prelude::SignerMiddleware,
+    signers::{coins_bip39::English, LocalWallet, MnemonicBuilder, Signer, Wallet},
+    types::{transaction::eip2718::TypedTransaction, TransactionReceipt, TransactionRequest},
 };
 use lazy_static::lazy_static;
+use std::{fs, sync::Mutex};
 
-use crate::{keystore, networks, utils};
+use crate::{account, keystore, networks, provider, utils};
 
 lazy_static! {
     static ref WALLET: Mutex<Option<Wallet<SigningKey>>> = Mutex::new(None);
@@ -15,13 +16,12 @@ lazy_static! {
 }
 
 pub fn import_wallet() {
-    let secret = take_secret_input().unwrap();
+    let secret = account::take_secret_input().unwrap();
 
-    let (account_key, _account_name) = create_new_acc(Some(secret));
+    let (account_key, _account_name) = account::create_new_acc(Some(secret));
 
     build_wallet(&account_key, networks::get_selected_chain_id());
 }
-
 pub fn create_wallet() {
     let mut create_new_acc_confirmation = String::new();
     utils::take_user_input(
@@ -32,13 +32,12 @@ pub fn create_wallet() {
 
     if create_new_acc_confirmation.trim().to_lowercase() == "y" {
         // * create new wallet
-        let (account_key, _account_name) = create_new_acc(None);
+        let (account_key, _account_name) = account::create_new_acc(None);
 
         // * generate wallet from phrase
         build_wallet(&account_key, networks::get_selected_chain_id());
     }
 }
-
 pub fn select_wallet(acc_name: &str) {
     // * create file path
     let mut file_name = String::from("accounts/");
@@ -57,7 +56,6 @@ pub fn select_wallet(acc_name: &str) {
 
     build_wallet(&secret_key, networks::get_selected_chain_id());
 }
-
 pub fn build_wallet(account_key: &str, chain_id: u8) {
     let wallet = if utils::is_pkey(account_key) {
         account_key
@@ -75,75 +73,91 @@ pub fn build_wallet(account_key: &str, chain_id: u8) {
     let mut data = WALLET.lock().unwrap();
     *data = Some(wallet);
 }
-
 pub fn get_wallet() -> Option<Wallet<SigningKey>> {
     let wallet = WALLET.lock().unwrap();
 
     wallet.clone()
 }
-
 pub fn get_account_key() -> Option<String> {
     let data = ACCOUNT_KEY.lock().expect("Failed to lock acc key");
 
     data.clone()
 }
+pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error::Error>> {
+    let wallet = get_wallet().unwrap();
 
-/* Private functions */
-fn create_new_acc(secret: Option<String>) -> (String, String) {
-    let mut password_string = String::new();
-    utils::take_user_input(
-        "Password",
-        &mut password_string,
-        "Enter password to protect account:",
-    );
+    let provider = provider::get_provider();
 
-    let mut account_name = String::new();
-    utils::take_user_input("Account name", &mut account_name, "Enter account name:");
+    let client = SignerMiddleware::new(provider.clone(), wallet.clone());
 
-    account_name = String::from(account_name.trim());
+    let address_from = wallet.address();
 
-    let account_key = if secret.is_some() {
-        Some(secret).unwrap().unwrap()
-    } else {
-        Mnemonic::<English>::new(&mut rand::thread_rng()).to_phrase()
-    };
+    let balance_from = provider::fetch_balance(address_from).await?;
+    // let balance_from: u128 = 10000000000000000000000000000000000;
 
-    account_name.push_str(".json");
+    let gas_price = provider::fetch_gas_price().await?;
+    // let gas_price = 0.00002;
 
-    let keystore = web3_keystore::encrypt(
-        &mut rand::thread_rng(),
-        &account_key,
-        password_string.trim(),
-        None,
-        Some(account_name.clone()),
-    )
-    .unwrap();
+    println!("Available balance: {}", balance_from);
 
-    let account_json = keystore::serialize_keystore(&keystore);
+    let mut address_to = String::new();
+    utils::take_user_input("Sending to", &mut address_to, "Enter recipient address:");
 
-    let mut file_name = String::from("accounts/");
-    file_name.push_str(account_name.trim());
+    let mut value_str = String::new();
+    utils::take_user_input("value", &mut value_str, "\n\nEnter amount to send in ETH:");
 
-    fs::File::create(&file_name).expect("Failed to create file");
-    fs::write(&file_name, account_json.as_bytes()).expect("failed to write to file");
-
-    (account_key.clone(), account_name.clone())
-}
-
-fn take_secret_input() -> Option<String> {
-    let mut user_input = String::new();
-
-    utils::take_user_input(
-        "secret",
-        &mut user_input,
-        "\n\nEnter 12 word seed phrase or private key:",
-    );
-
-    let valid_secret = utils::validate_secret_input(&user_input);
-
-    if !valid_secret {
-        return None;
+    while value_str.trim().parse::<f64>()?.ge(&balance_from) {
+        println!(
+            "Amount limit exceeded, sender has {} ETH and you're trying to send {} ETH \n",
+            balance_from,
+            value_str.trim()
+        );
+        value_str = String::new();
+        utils::take_user_input("value", &mut value_str, "Enter amount to send in ETH:");
     }
 
-    return Some(String::from(user_input.trim()));
+    let transaction_req: TypedTransaction = TransactionRequest::new()
+        .from(address_from)
+        .to(address_to.trim())
+        .value(U256::from(ethers::utils::parse_ether(value_str.trim())?))
+        .into();
+
+    let estimated_gas = provider
+        .estimate_gas(&transaction_req, None)
+        .await?
+        .to_string()
+        .parse::<f64>()?;
+
+    let tx_cost = gas_price * estimated_gas;
+
+    println!("tx cost: {} ETH", tx_cost);
+
+    println!(
+        "\nSending {} ETH from {:?} to {:?}\n",
+        value_str.trim(),
+        address_from,
+        address_to.trim()
+    );
+
+    let mut tx_confirmation = String::new();
+    utils::take_user_input(
+        "confirmation",
+        &mut tx_confirmation,
+        "Are you sure you want to perform this transaction? [Y/N]",
+    );
+
+    if tx_confirmation.trim().to_lowercase() == "y" {
+        let sent_tx = client
+            .send_transaction(transaction_req, None)
+            .await?
+            .await?;
+
+        let receipt = sent_tx.expect("failed to send transaction");
+
+        println!("Tx hash: {:?}", receipt.transaction_hash);
+
+        Ok(Some(receipt))
+    } else {
+        Ok(None)
+    }
 }

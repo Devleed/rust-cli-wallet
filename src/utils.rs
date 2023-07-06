@@ -11,11 +11,9 @@ pub fn take_user_input(key: &str, input: &mut String, msg: &str) {
 
     println!("\n{}: {}", key, input);
 }
-
 pub fn is_pkey(secret: &str) -> bool {
     !secret.trim().contains(" ")
 }
-
 pub fn validate_secret_input(secret: &str) -> bool {
     let is_pkey = is_pkey(secret);
 

@@ -35,11 +35,9 @@ pub fn set_network(value: u8) {
     provider::set_provider(NETWORKS.get(&value).unwrap().url.trim());
     wallet::build_wallet(&wallet::get_account_key().unwrap(), value);
 }
-
 pub fn get_network_url_by_chain_id(chain_id: &u8) -> &'static str {
     NETWORKS.get(chain_id).unwrap().url.as_str()
 }
-
 pub fn change_network_request() {
     let (chain_ids, network_names) = (get_chain_ids(), get_chain_names());
 
@@ -55,16 +53,15 @@ pub fn change_network_request() {
 
     println!("Switched to network: {}", network_names[selection.unwrap()]);
 }
-
 pub fn get_selected_chain_id() -> u8 {
     let data = SELECTED_NETWORK.lock().unwrap();
     data.clone()
 }
 
+/* PRIVATE FUNCTIONS */
 fn get_chain_ids() -> Vec<&'static u8> {
     NETWORKS.keys().collect()
 }
-
 fn get_chain_names() -> Vec<String> {
     NETWORKS
         .values()

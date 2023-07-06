@@ -12,7 +12,6 @@ pub fn serialize_keystore(keystore: &web3_keystore::KeyStore) -> String {
     let serialized_data = serializer.into_inner();
     String::from_utf8(serialized_data).unwrap()
 }
-
 pub fn deserialize_keystore(json_string: &str, password: &str) -> String {
     let mut deserializer = Deserializer::from_str(json_string);
 

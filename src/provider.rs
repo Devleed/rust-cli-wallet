@@ -26,11 +26,9 @@ pub fn set_provider(network_url: &str) {
 
     *data = provider;
 }
-
 pub fn get_provider() -> Provider<Http> {
     PROVIDER.lock().unwrap().clone()
 }
-
 pub async fn fetch_balance(address: H160) -> Result<f64, Box<dyn std::error::Error>> {
     let provider = PROVIDER.lock().unwrap();
 
@@ -43,7 +41,6 @@ pub async fn fetch_balance(address: H160) -> Result<f64, Box<dyn std::error::Err
         .trim()
         .parse::<f64>()?)
 }
-
 pub async fn fetch_gas_price() -> Result<f64, Box<dyn std::error::Error>> {
     let provider = PROVIDER.lock().unwrap();
 
