@@ -6,10 +6,11 @@ use lazy_static::lazy_static;
 use std::fs;
 use std::sync::Mutex;
 
-use crate::{keystore, networks, provider, utils, wallet};
+use crate::{keystore, networks, provider, tokens, utils, wallet};
 
 lazy_static! {
     static ref ACCOUNT_KEY: Mutex<Option<String>> = Mutex::new(None);
+    static ref ACCOUNT_NAME: Mutex<Option<String>> = Mutex::new(None);
 }
 
 pub async fn launch_app() {
@@ -61,6 +62,11 @@ pub fn get_account_key() -> Option<String> {
 
     data.clone()
 }
+pub fn get_account_name() -> Option<String> {
+    let data = ACCOUNT_NAME.lock().expect("Failed to lock acc name");
+
+    data.clone()
+}
 
 /* PRIVATE FUNCTIONS */
 
@@ -91,6 +97,7 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) {
         println!("balance: {} ETH", balance)
     } else if selected_action == 3 {
         // * Add token
+        tokens::add_token().await;
     }
 }
 fn create_new_acc(secret: Option<String>) -> (String, String) {
@@ -194,6 +201,9 @@ fn select_wallet(acc_name: &str) {
 
     let mut data = ACCOUNT_KEY.lock().unwrap();
     *data = Some(secret_key.clone());
+
+    let mut account_name = ACCOUNT_NAME.lock().unwrap();
+    *account_name = Some(acc_name.to_string());
 
     wallet::build_wallet(&secret_key, networks::get_selected_chain_id());
 }
