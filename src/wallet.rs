@@ -1,3 +1,4 @@
+use crate::{provider, utils};
 use coins_bip32::prelude::SigningKey;
 use ethers::prelude::*;
 use ethers::{
@@ -6,56 +7,15 @@ use ethers::{
     types::{transaction::eip2718::TypedTransaction, TransactionReceipt, TransactionRequest},
 };
 use lazy_static::lazy_static;
-use std::{fs, sync::Mutex};
-
-use crate::{account, keystore, networks, provider, utils};
+use spinners::{Spinner, Spinners};
+use std::sync::Mutex;
+use std::thread::sleep;
+use std::time::Duration;
 
 lazy_static! {
     static ref WALLET: Mutex<Option<Wallet<SigningKey>>> = Mutex::new(None);
-    static ref ACCOUNT_KEY: Mutex<Option<String>> = Mutex::new(None);
 }
 
-pub fn import_wallet() {
-    let secret = account::take_secret_input().unwrap();
-
-    let (account_key, _account_name) = account::create_new_acc(Some(secret));
-
-    build_wallet(&account_key, networks::get_selected_chain_id());
-}
-pub fn create_wallet() {
-    let mut create_new_acc_confirmation = String::new();
-    utils::take_user_input(
-        "Confirmation",
-        &mut create_new_acc_confirmation,
-        "Do you want to create a new wallet? [Y/N]",
-    );
-
-    if create_new_acc_confirmation.trim().to_lowercase() == "y" {
-        // * create new wallet
-        let (account_key, _account_name) = account::create_new_acc(None);
-
-        // * generate wallet from phrase
-        build_wallet(&account_key, networks::get_selected_chain_id());
-    }
-}
-pub fn select_wallet(acc_name: &str) {
-    // * create file path
-    let mut file_name = String::from("accounts/");
-    file_name.push_str(acc_name);
-
-    // * read file from given path
-    let account_json = fs::read_to_string(file_name.trim()).expect("Failed to read account.");
-
-    let mut password_string = String::new();
-    utils::take_user_input("Password", &mut password_string, "Enter password:");
-
-    let secret_key = keystore::deserialize_keystore(&account_json, password_string.trim());
-
-    let mut data = ACCOUNT_KEY.lock().unwrap();
-    *data = Some(secret_key.clone());
-
-    build_wallet(&secret_key, networks::get_selected_chain_id());
-}
 pub fn build_wallet(account_key: &str, chain_id: u8) {
     let wallet = if utils::is_pkey(account_key) {
         account_key
@@ -78,25 +38,15 @@ pub fn get_wallet() -> Option<Wallet<SigningKey>> {
 
     wallet.clone()
 }
-pub fn get_account_key() -> Option<String> {
-    let data = ACCOUNT_KEY.lock().expect("Failed to lock acc key");
-
-    data.clone()
-}
 pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error::Error>> {
     let wallet = get_wallet().unwrap();
-
     let provider = provider::get_provider();
-
     let client = SignerMiddleware::new(provider.clone(), wallet.clone());
 
     let address_from = wallet.address();
 
     let balance_from = provider::fetch_balance(address_from).await?;
-    // let balance_from: u128 = 10000000000000000000000000000000000;
-
     let gas_price = provider::fetch_gas_price().await?;
-    // let gas_price = 0.00002;
 
     println!("Available balance: {}", balance_from);
 
@@ -147,6 +97,10 @@ pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error
     );
 
     if tx_confirmation.trim().to_lowercase() == "y" {
+        let mut sp = Spinner::new(Spinners::Dots9, "Transaction pending".into());
+        sleep(Duration::from_secs(3));
+        sp.stop();
+
         let sent_tx = client
             .send_transaction(transaction_req, None)
             .await?
