@@ -78,7 +78,13 @@ fn create_or_import_wallet(create_new: bool) {
     }
 }
 async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) {
-    let items = vec!["Send eth", "Change network", "Display balance", "Add token"];
+    let items = vec![
+        "Send eth",
+        "Change network",
+        "Display balance",
+        "Add token",
+        "Select token",
+    ];
 
     let selection = Select::with_theme(&ColorfulTheme::default())
         .items(&items)
@@ -98,6 +104,18 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) {
     } else if selected_action == 3 {
         // * Add token
         tokens::add_token().await;
+    } else if selected_action == 4 {
+        let tokens: Vec<tokens::Token> = tokens::get_user_tokens();
+        let token_names: Vec<String> = tokens.clone().into_iter().map(|token| token.name).collect();
+
+        let selection = Select::with_theme(&ColorfulTheme::default())
+            .items(&token_names)
+            .default(0)
+            .interact_on_opt(&Term::stderr())
+            .expect("Failed to create token selection list.");
+
+        let selected_token = &tokens[selection.unwrap()];
+        tokens::launch_token_actions(selected_token);
     }
 }
 fn create_new_acc(secret: Option<String>) -> (String, String) {
