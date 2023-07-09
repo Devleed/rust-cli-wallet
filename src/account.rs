@@ -1,11 +1,11 @@
 use coins_bip32::prelude::SigningKey;
-use dialoguer::{console::Term, theme::ColorfulTheme, Select};
 use ethers::prelude::*;
 use ethers::signers::coins_bip39::{English, Mnemonic};
 use lazy_static::lazy_static;
 use std::fs;
 use std::sync::Mutex;
 
+use crate::wallet::get_wallet;
 use crate::{keystore, networks, provider, tokens, utils, wallet};
 
 lazy_static! {
@@ -28,14 +28,9 @@ pub async fn launch_app() {
     account_list.push(String::from("Import wallet"));
 
     // * display list of all accounts for user to select
-    println!("Available accounts: ");
-    let selection = Select::with_theme(&ColorfulTheme::default())
-        .items(&account_list)
-        .default(0)
-        .interact_on_opt(&Term::stderr())
-        .expect("Failed to create account selection list.");
+    let selection = utils::perform_selection("Accounts", &account_list, Some("Available accounts"));
 
-    let selected_value = &account_list[selection.unwrap()].trim().to_lowercase();
+    let selected_value = &account_list[selection].trim().to_lowercase();
 
     // * check the option selected
     if selected_value == "create new" || selected_value == "import wallet" {
@@ -79,20 +74,14 @@ fn create_or_import_wallet(create_new: bool) {
 }
 async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) {
     let items = vec![
-        "Send eth",
-        "Change network",
-        "Display balance",
-        "Add token",
-        "Select token",
+        "Send eth".to_string(),
+        "Change network".to_string(),
+        "Display balance".to_string(),
+        "Add token".to_string(),
+        "Select token".to_string(),
     ];
 
-    let selection = Select::with_theme(&ColorfulTheme::default())
-        .items(&items)
-        .default(0)
-        .interact_on_opt(&Term::stderr())
-        .expect("Failed to create account selection list.");
-
-    let selected_action = selection.unwrap();
+    let selected_action = utils::perform_selection("Authenticated dashboard", &items, None);
 
     if selected_action == 0 {
         wallet::send_eth().await.unwrap();
@@ -108,14 +97,10 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) {
         let tokens: Vec<tokens::Token> = tokens::get_user_tokens();
         let token_names: Vec<String> = tokens.clone().into_iter().map(|token| token.name).collect();
 
-        let selection = Select::with_theme(&ColorfulTheme::default())
-            .items(&token_names)
-            .default(0)
-            .interact_on_opt(&Term::stderr())
-            .expect("Failed to create token selection list.");
+        let selection = utils::perform_selection("Tokens", &token_names, Some("Select token:"));
 
-        let selected_token = &tokens[selection.unwrap()];
-        tokens::launch_token_actions(selected_token);
+        let selected_token = &tokens[selection];
+        launch_token_actions(selected_token).await;
     }
 }
 fn create_new_acc(secret: Option<String>) -> (String, String) {
@@ -224,4 +209,20 @@ fn select_wallet(acc_name: &str) {
     *account_name = Some(acc_name.to_string());
 
     wallet::build_wallet(&secret_key, networks::get_selected_chain_id());
+}
+
+pub async fn launch_token_actions(token: &tokens::Token) {
+    loop {
+        let actions = vec!["Display balance".to_string(), "Send".to_string()];
+        let wallet = get_wallet().unwrap();
+
+        let selection = utils::perform_selection("Token actions", &actions, None);
+
+        if selection == 0 {
+            let balance = tokens::fetch_token_balance(token.address, wallet.address()).await;
+
+            println!("User balance: {} {}", balance, token.name);
+        } else if selection == 1 {
+        }
+    }
 }

@@ -1,5 +1,7 @@
 use std::io;
 
+use dialoguer::{console::Term, theme::ColorfulTheme, Select};
+
 const SEED_PHRASE_LEN: usize = 12;
 const PKEY_LEN: usize = 64;
 
@@ -36,4 +38,19 @@ pub fn validate_secret_input(secret: &str) -> bool {
     }
 
     return true;
+}
+pub fn perform_selection(key: &str, items: &Vec<String>, heading: Option<&str>) -> usize {
+    if heading.is_some() {
+        println!("{}", heading.unwrap());
+    }
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .items(items)
+        .default(0)
+        .interact_on_opt(&Term::stderr())
+        .unwrap_or_else(|_| {
+            println!("failed to create selection list for {}", key);
+            return None;
+        });
+
+    selection.unwrap()
 }

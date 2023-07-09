@@ -1,5 +1,4 @@
-use dialoguer::{console::Term, theme::ColorfulTheme, Select};
-use ethers::types::Address;
+use ethers::types::{Address, H160, U256};
 use serde::{Deserialize, Serialize};
 
 use crate::{account, ierc20::IERC20, networks, provider, utils};
@@ -85,14 +84,14 @@ pub fn get_user_tokens() -> Vec<Token> {
         .collect::<Vec<_>>()
 }
 
-pub fn launch_token_actions(token: &Token) {
-    loop {
-        let actions = vec!["Display balance", "Send"];
+pub async fn fetch_token_balance(token_address: H160, user_address: H160) -> U256 {
+    let provider = provider::get_provider();
+    let client = Arc::new(provider);
 
-        let selection = Select::with_theme(&ColorfulTheme::default())
-            .items(&actions)
-            .default(0)
-            .interact_on_opt(&Term::stderr())
-            .expect("Failed to create token action list.");
-    }
+    let contract = IERC20::new(token_address, client);
+
+    contract
+        .balance_of(user_address)
+        .await
+        .expect("Failed to fetch user token balance")
 }

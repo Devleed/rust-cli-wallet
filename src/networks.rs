@@ -1,13 +1,10 @@
-use dialoguer::console::Term;
-use dialoguer::theme::ColorfulTheme;
-use dialoguer::Select;
 use lazy_static::lazy_static;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
 use std::sync::Mutex;
 
-use crate::{account, provider, wallet};
+use crate::{account, provider, utils, wallet};
 
 pub const DEFAULT_SELECTED_CHAINID: u8 = 5;
 
@@ -41,17 +38,14 @@ pub fn get_network_url_by_chain_id(chain_id: &u8) -> &'static str {
 pub fn change_network_request() {
     let (chain_ids, network_names) = (get_chain_ids(), get_chain_names());
 
-    let selection = Select::with_theme(&ColorfulTheme::default())
-        .items(&network_names)
-        .default(0)
-        .interact_on_opt(&Term::stderr())
-        .expect("Failed to create network selection list.");
+    let selection =
+        utils::perform_selection("Network selection", &network_names, Some("Select network"));
 
-    let selected_network = chain_ids[selection.unwrap()].clone();
+    let selected_network = chain_ids[selection].clone();
 
     set_network(selected_network);
 
-    println!("Switched to network: {}", network_names[selection.unwrap()]);
+    println!("Switched to network: {}", network_names[selection]);
 }
 pub fn get_selected_chain_id() -> u8 {
     let data = SELECTED_NETWORK.lock().unwrap();
