@@ -28,9 +28,14 @@ pub async fn launch_app() {
     account_list.push(String::from("Import wallet"));
 
     // * display list of all accounts for user to select
-    let selection = utils::perform_selection("Accounts", &account_list, Some("Available accounts"));
+    let selection = utils::perform_selection(
+        "Accounts",
+        &mut account_list,
+        Some("Available accounts"),
+        false,
+    );
 
-    let selected_value = &account_list[selection].trim().to_lowercase();
+    let selected_value = &account_list[selection.unwrap()].trim().to_lowercase();
 
     // * check the option selected
     if selected_value == "create new" || selected_value == "import wallet" {
@@ -73,7 +78,7 @@ fn create_or_import_wallet(create_new: bool) {
     }
 }
 async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) {
-    let items = vec![
+    let mut items = vec![
         "Send eth".to_string(),
         "Change network".to_string(),
         "Display balance".to_string(),
@@ -81,7 +86,9 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) {
         "Select token".to_string(),
     ];
 
-    let selected_action = utils::perform_selection("Authenticated dashboard", &items, None);
+    let selection = utils::perform_selection("Authenticated dashboard", &mut items, None, false);
+
+    let selected_action = selection.unwrap();
 
     if selected_action == 0 {
         wallet::send_eth().await.unwrap();
@@ -95,12 +102,16 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) {
         tokens::add_token().await;
     } else if selected_action == 4 {
         let tokens: Vec<tokens::Token> = tokens::get_user_tokens();
-        let token_names: Vec<String> = tokens.clone().into_iter().map(|token| token.name).collect();
+        let mut token_names: Vec<String> =
+            tokens.clone().into_iter().map(|token| token.name).collect();
 
-        let selection = utils::perform_selection("Tokens", &token_names, Some("Select token:"));
+        let selection =
+            utils::perform_selection("Tokens", &mut token_names, Some("Select token:"), true);
 
-        let selected_token = &tokens[selection];
-        launch_token_actions(selected_token).await;
+        if selection.is_some() {
+            let selected_token = &tokens[selection.unwrap()];
+            launch_token_actions(selected_token).await;
+        }
     }
 }
 fn create_new_acc(secret: Option<String>) -> (String, String) {
@@ -213,16 +224,19 @@ fn select_wallet(acc_name: &str) {
 
 pub async fn launch_token_actions(token: &tokens::Token) {
     loop {
-        let actions = vec!["Display balance".to_string(), "Send".to_string()];
+        let mut actions = vec!["Display balance".to_string(), "Send".to_string()];
         let wallet = get_wallet().unwrap();
 
-        let selection = utils::perform_selection("Token actions", &actions, None);
+        let selection = utils::perform_selection("Token actions", &mut actions, None, true);
 
-        if selection == 0 {
+        if selection.is_none() {
+            break;
+        } else if selection.unwrap() == 0 {
             let balance = tokens::fetch_token_balance(token.address, wallet.address()).await;
 
             println!("User balance: {} {}", balance, token.name);
-        } else if selection == 1 {
+        } else if selection.unwrap() == 1 {
+            tokens::send_token(token).await;
         }
     }
 }

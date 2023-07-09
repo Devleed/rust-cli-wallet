@@ -36,16 +36,22 @@ pub fn get_network_url_by_chain_id(chain_id: &u8) -> &'static str {
     NETWORKS.get(chain_id).unwrap().url.as_str()
 }
 pub fn change_network_request() {
-    let (chain_ids, network_names) = (get_chain_ids(), get_chain_names());
+    let (chain_ids, mut network_names) = (get_chain_ids(), get_chain_names());
 
-    let selection =
-        utils::perform_selection("Network selection", &network_names, Some("Select network"));
+    let selection = utils::perform_selection(
+        "Network selection",
+        &mut network_names,
+        Some("Select network"),
+        true,
+    );
 
-    let selected_network = chain_ids[selection].clone();
+    if selection.is_some() {
+        let selected_network = chain_ids[selection.unwrap()].clone();
 
-    set_network(selected_network);
+        set_network(selected_network);
 
-    println!("Switched to network: {}", network_names[selection]);
+        println!("Switched to network: {}", network_names[selection.unwrap()]);
+    }
 }
 pub fn get_selected_chain_id() -> u8 {
     let data = SELECTED_NETWORK.lock().unwrap();

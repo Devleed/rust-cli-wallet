@@ -39,7 +39,16 @@ pub fn validate_secret_input(secret: &str) -> bool {
 
     return true;
 }
-pub fn perform_selection(key: &str, items: &Vec<String>, heading: Option<&str>) -> usize {
+pub fn perform_selection(
+    key: &str,
+    items: &mut Vec<String>,
+    heading: Option<&str>,
+    with_go_back: bool,
+) -> Option<usize> {
+    if with_go_back {
+        items.push("Go back".to_string());
+    }
+
     if heading.is_some() {
         println!("{}", heading.unwrap());
     }
@@ -52,5 +61,9 @@ pub fn perform_selection(key: &str, items: &Vec<String>, heading: Option<&str>) 
             return None;
         });
 
-    selection.unwrap()
+    if with_go_back && selection.unwrap() == items.len() - 1 {
+        return None;
+    }
+
+    Some(selection.unwrap())
 }

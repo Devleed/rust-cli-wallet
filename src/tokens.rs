@@ -1,6 +1,10 @@
-use ethers::types::{Address, H160, U256};
+use ethers::prelude::*;
+use ethers::providers::Http;
+use ethers::providers::Provider;
+use ethers::types::{Address, H160};
 use serde::{Deserialize, Serialize};
 
+use crate::wallet;
 use crate::{account, ierc20::IERC20, networks, provider, utils};
 use std::{fs, sync::Arc};
 
@@ -19,11 +23,9 @@ pub async fn add_token() {
     let mut token_address = String::from("");
     utils::take_user_input("Token address", &mut token_address, "Enter token address");
 
-    let provider = provider::get_provider();
-    let client = Arc::new(provider);
     let address: Address = token_address.trim().parse().unwrap();
 
-    let contract = IERC20::new(address, client);
+    let contract = create_contract_instance(address);
     let name = contract
         .name()
         .await
@@ -83,15 +85,51 @@ pub fn get_user_tokens() -> Vec<Token> {
         })
         .collect::<Vec<_>>()
 }
+pub async fn fetch_token_balance(token_address: H160, user_address: H160) -> f64 {
+    let contract = create_contract_instance(token_address);
 
-pub async fn fetch_token_balance(token_address: H160, user_address: H160) -> U256 {
+    let balance = contract
+        .balance_of(user_address)
+        .await
+        .expect("Failed to fetch user token balance");
+
+    ethers::utils::format_units(balance, "ether")
+        .unwrap()
+        .trim()
+        .parse::<f64>()
+        .unwrap()
+}
+pub async fn send_token(token: &Token) {
+    let provider = provider::get_provider();
+    let wallet = wallet::get_wallet().unwrap();
+    let client = Arc::new(SignerMiddleware::new(provider, wallet));
+
+    let contract = IERC20::new(token.address, client);
+
+    let mut recipient = String::new();
+    utils::take_user_input("Recipient", &mut recipient, "Enter recipient");
+    let to_address: Address = recipient.trim().parse().unwrap();
+
+    let mut value = String::new();
+    utils::take_user_input("value", &mut value, "Enter value");
+    let value: u64 = value.trim().parse().unwrap();
+    let decimal_amount = U256::from(value) * U256::exp10(token.decimals as usize);
+
+    let tx = contract.transfer(to_address, decimal_amount);
+    let pending_tx = tx.send().await.unwrap();
+    let receipt = pending_tx.await.unwrap();
+
+    if receipt.is_some() {
+        println!("Tx hash: {:?}", receipt.unwrap().transaction_hash);
+    }
+}
+
+/* PRIVATE FUNTIONS */
+fn create_contract_instance(token_address: H160) -> IERC20<Provider<Http>> {
     let provider = provider::get_provider();
     let client = Arc::new(provider);
 
     let contract = IERC20::new(token_address, client);
 
-    contract
-        .balance_of(user_address)
-        .await
-        .expect("Failed to fetch user token balance")
+    return contract;
 }
