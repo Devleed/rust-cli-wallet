@@ -1,4 +1,5 @@
 mod account;
+mod beneficiaries;
 mod ierc20;
 mod keystore;
 mod networks;

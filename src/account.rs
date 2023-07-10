@@ -6,7 +6,7 @@ use std::fs;
 use std::sync::Mutex;
 
 use crate::wallet::get_wallet;
-use crate::{keystore, networks, provider, tokens, utils, wallet};
+use crate::{beneficiaries, keystore, networks, provider, tokens, utils, wallet};
 
 lazy_static! {
     static ref ACCOUNT_KEY: Mutex<Option<String>> = Mutex::new(None);
@@ -102,6 +102,7 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) {
         "Display balance".to_string(),
         "Add token".to_string(),
         "Select token".to_string(),
+        "Add beneficiary".to_string(),
     ];
 
     let selection = utils::perform_selection("Authenticated dashboard", &mut items, None, false);
@@ -130,6 +131,8 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) {
             let selected_token = &tokens[selection.unwrap()];
             launch_token_actions(selected_token).await;
         }
+    } else if selected_action == 5 {
+        beneficiaries::add_beneficiary();
     }
 }
 fn create_new_acc(secret: Option<String>) -> (String, String) {
