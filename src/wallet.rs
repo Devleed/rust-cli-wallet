@@ -1,4 +1,4 @@
-use crate::{provider, utils};
+use crate::{beneficiaries, provider, utils};
 use coins_bip32::prelude::SigningKey;
 use ethers::prelude::*;
 use ethers::{
@@ -50,67 +50,73 @@ pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error
 
     println!("Available balance: {}", balance_from);
 
-    let mut address_to = String::new();
-    utils::take_user_input("Sending to", &mut address_to, "Enter recipient address:");
+    let address_to = beneficiaries::select_beneficiary();
 
-    let mut value_str = String::new();
-    utils::take_user_input("value", &mut value_str, "\n\nEnter amount to send in ETH:");
+    if address_to.is_some() {
+        // let mut address_to = String::new();
+        // utils::take_user_input("Sending to", &mut address_to, "Enter recipient address:");
 
-    while value_str.trim().parse::<f64>()?.ge(&balance_from) {
-        println!(
-            "Amount limit exceeded, sender has {} ETH and you're trying to send {} ETH \n",
-            balance_from,
-            value_str.trim()
-        );
-        value_str = String::new();
-        utils::take_user_input("value", &mut value_str, "Enter amount to send in ETH:");
-    }
+        let mut value_str = String::new();
+        utils::take_user_input("value", &mut value_str, "\n\nEnter amount to send in ETH:");
 
-    let transaction_req: TypedTransaction = TransactionRequest::new()
-        .from(address_from)
-        .to(address_to.trim())
-        .value(U256::from(ethers::utils::parse_ether(value_str.trim())?))
-        .into();
+        while value_str.trim().parse::<f64>()?.ge(&balance_from) {
+            println!(
+                "Amount limit exceeded, sender has {} ETH and you're trying to send {} ETH \n",
+                balance_from,
+                value_str.trim()
+            );
+            value_str = String::new();
+            utils::take_user_input("value", &mut value_str, "Enter amount to send in ETH:");
+        }
 
-    let estimated_gas = provider
-        .estimate_gas(&transaction_req, None)
-        .await?
-        .to_string()
-        .parse::<f64>()?;
+        let transaction_req: TypedTransaction = TransactionRequest::new()
+            .from(address_from)
+            .to(address_to.unwrap())
+            .value(U256::from(ethers::utils::parse_ether(value_str.trim())?))
+            .into();
 
-    let tx_cost = gas_price * estimated_gas;
-
-    println!("tx cost: {} ETH", tx_cost);
-
-    println!(
-        "\nSending {} ETH from {:?} to {:?}\n",
-        value_str.trim(),
-        address_from,
-        address_to.trim()
-    );
-
-    let mut tx_confirmation = String::new();
-    utils::take_user_input(
-        "confirmation",
-        &mut tx_confirmation,
-        "Are you sure you want to perform this transaction? [Y/N]",
-    );
-
-    if tx_confirmation.trim().to_lowercase() == "y" {
-        let mut sp = Spinner::new(Spinners::Dots9, "Transaction pending".into());
-        sleep(Duration::from_secs(3));
-        sp.stop();
-
-        let sent_tx = client
-            .send_transaction(transaction_req, None)
+        let estimated_gas = provider
+            .estimate_gas(&transaction_req, None)
             .await?
-            .await?;
+            .to_string()
+            .parse::<f64>()?;
 
-        let receipt = sent_tx.expect("failed to send transaction");
+        let tx_cost = gas_price * estimated_gas;
 
-        println!("Tx hash: {:?}", receipt.transaction_hash);
+        println!("tx cost: {} ETH", tx_cost);
 
-        Ok(Some(receipt))
+        println!(
+            "\nSending {} ETH from {:?} to {:?}\n",
+            value_str.trim(),
+            address_from,
+            address_to
+        );
+
+        let mut tx_confirmation = String::new();
+        utils::take_user_input(
+            "confirmation",
+            &mut tx_confirmation,
+            "Are you sure you want to perform this transaction? [Y/N]",
+        );
+
+        if tx_confirmation.trim().to_lowercase() == "y" {
+            let mut sp = Spinner::new(Spinners::Dots9, "Transaction pending".into());
+            sleep(Duration::from_secs(3));
+            sp.stop();
+
+            let sent_tx = client
+                .send_transaction(transaction_req, None)
+                .await?
+                .await?;
+
+            let receipt = sent_tx.expect("failed to send transaction");
+
+            println!("Tx hash: {:?}", receipt.transaction_hash);
+
+            Ok(Some(receipt))
+        } else {
+            Ok(None)
+        }
     } else {
         Ok(None)
     }
