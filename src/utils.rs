@@ -23,16 +23,12 @@ pub fn validate_secret_input(secret: &str) -> bool {
         let pkey = secret.trim().replace("0x", "");
 
         if pkey.len().ne(&PKEY_LEN) {
-            println!("Invalid private key");
-
             return false;
         }
     } else {
         let count = secret.split_whitespace().count();
 
         if count.ne(&SEED_PHRASE_LEN) {
-            println!("Invalid seed phrase");
-
             return false;
         }
     }

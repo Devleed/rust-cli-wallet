@@ -67,6 +67,24 @@ pub fn get_account_name() -> Option<String> {
 
     data.clone()
 }
+pub async fn launch_token_actions(token: &tokens::Token) {
+    loop {
+        let mut actions = vec!["Display balance".to_string(), "Send".to_string()];
+        let wallet = get_wallet().unwrap();
+
+        let selection = utils::perform_selection("Token actions", &mut actions, None, true);
+
+        if selection.is_none() {
+            break;
+        } else if selection.unwrap() == 0 {
+            let balance = tokens::fetch_token_balance(token.address, wallet.address()).await;
+
+            println!("User balance: {} {}", balance, token.name);
+        } else if selection.unwrap() == 1 {
+            tokens::send_token(token).await;
+        }
+    }
+}
 
 /* PRIVATE FUNCTIONS */
 
@@ -122,15 +140,49 @@ fn create_new_acc(secret: Option<String>) -> (String, String) {
         "Enter password to protect account:",
     );
 
+    while password_string.trim().len() < 5 {
+        println!("Password should be atleast of 6 characters");
+        utils::take_user_input(
+            "Password",
+            &mut password_string,
+            "Enter password to protect account:",
+        );
+    }
+
     let mut account_name = String::new();
     utils::take_user_input("Account name", &mut account_name, "Enter account name:");
+
+    while account_name.trim().len() < 5 {
+        println!("Invalid account name");
+        utils::take_user_input("Account name", &mut account_name, "Enter account name:");
+    }
 
     account_name = String::from(account_name.trim());
 
     let account_key = if secret.is_some() {
-        Some(secret).unwrap().unwrap()
+        secret.unwrap()
     } else {
-        Mnemonic::<English>::new(&mut rand::thread_rng()).to_phrase()
+        let phrase = Mnemonic::<English>::new(&mut rand::thread_rng()).to_phrase();
+
+        println!("{}", phrase);
+
+        let mut confirmation = String::new();
+        utils::take_user_input(
+            "confirmation",
+            &mut confirmation,
+            "Have you saved this seed phrase somewhere? [y/n]",
+        );
+
+        while confirmation.trim() != "y" {
+            println!("Please save this seed phrase somewhere");
+            utils::take_user_input(
+                "confirmation",
+                &mut confirmation,
+                "Have you saved this seed phrase somewhere? [y/n]",
+            );
+        }
+
+        phrase
     };
 
     let keystore = web3_keystore::encrypt(
@@ -175,9 +227,14 @@ fn take_secret_input() -> Option<String> {
     return Some(String::from(user_input.trim()));
 }
 fn import_wallet() {
-    let secret = take_secret_input().unwrap();
+    let mut secret = take_secret_input();
 
-    let (account_key, _account_name) = create_new_acc(Some(secret));
+    while secret.is_none() {
+        println!("Invalid seed phrase or private key.");
+        secret = take_secret_input();
+    }
+
+    let (account_key, _account_name) = create_new_acc(secret);
 
     wallet::build_wallet(&account_key, networks::get_selected_chain_id());
 }
@@ -220,23 +277,4 @@ fn select_wallet(acc_name: &str) {
     *account_name = Some(acc_name.to_string());
 
     wallet::build_wallet(&secret_key, networks::get_selected_chain_id());
-}
-
-pub async fn launch_token_actions(token: &tokens::Token) {
-    loop {
-        let mut actions = vec!["Display balance".to_string(), "Send".to_string()];
-        let wallet = get_wallet().unwrap();
-
-        let selection = utils::perform_selection("Token actions", &mut actions, None, true);
-
-        if selection.is_none() {
-            break;
-        } else if selection.unwrap() == 0 {
-            let balance = tokens::fetch_token_balance(token.address, wallet.address()).await;
-
-            println!("User balance: {} {}", balance, token.name);
-        } else if selection.unwrap() == 1 {
-            tokens::send_token(token).await;
-        }
-    }
 }
