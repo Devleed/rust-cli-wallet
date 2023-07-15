@@ -5,6 +5,7 @@ use ethers::providers::Provider;
 use ethers::types::{Address, H160};
 use serde::{Deserialize, Serialize};
 
+use crate::beneficiaries;
 use crate::wallet;
 use crate::{account, ierc20::IERC20, networks, provider, utils};
 use std::{fs, sync::Arc};
@@ -118,9 +119,7 @@ pub async fn send_token(token: &Token) {
     match contract {
         ContractInstance::ProviderHttp(_contract_without_signer) => {}
         ContractInstance::SignerMiddlewareHttp(contract_with_signer) => {
-            let mut recipient = String::new();
-            utils::take_user_input("Recipient", &mut recipient, "Enter recipient");
-            let to_address: Address = recipient.trim().parse().unwrap();
+            let to_address = beneficiaries::select_beneficiary().unwrap();
 
             let wallet = wallet::get_wallet().unwrap();
 
