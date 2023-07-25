@@ -119,36 +119,38 @@ pub async fn send_token(token: &Token) {
     match contract {
         ContractInstance::ProviderHttp(_contract_without_signer) => {}
         ContractInstance::SignerMiddlewareHttp(contract_with_signer) => {
-            let to_address = beneficiaries::select_beneficiary().unwrap();
+            let to_address = beneficiaries::select_beneficiary();
 
-            let wallet = wallet::get_wallet().unwrap();
+            if to_address.is_some() {
+                let wallet = wallet::get_wallet().unwrap();
 
-            let user_balance = fetch_token_balance(token.address, wallet.address()).await;
+                let user_balance = fetch_token_balance(token.address, wallet.address()).await;
 
-            let mut value = String::new();
-            utils::take_user_input("value", &mut value, "Enter amount to send:");
-
-            while value.trim().parse::<f64>().unwrap().ge(&user_balance) {
-                println!(
-                    "Amount limit exceeded, sender has {} {} and you're trying to send {} {} \n",
-                    user_balance,
-                    token.name,
-                    value.trim(),
-                    token.name
-                );
-                value = String::new();
+                let mut value = String::new();
                 utils::take_user_input("value", &mut value, "Enter amount to send:");
-            }
 
-            let decimal_amount = U256::from(value.trim().parse::<u64>().unwrap())
-                * U256::exp10(token.decimals as usize);
+                while value.trim().parse::<f64>().unwrap().ge(&user_balance) {
+                    println!(
+                        "Amount limit exceeded, sender has {} {} and you're trying to send {} {} \n",
+                        user_balance,
+                        token.name,
+                        value.trim(),
+                        token.name
+                    );
+                    value = String::new();
+                    utils::take_user_input("value", &mut value, "Enter amount to send:");
+                }
 
-            let tx = contract_with_signer.transfer(to_address, decimal_amount);
-            let pending_tx = tx.send().await.unwrap();
-            let receipt = pending_tx.await.unwrap();
+                let decimal_amount = U256::from(value.trim().parse::<u64>().unwrap())
+                    * U256::exp10(token.decimals as usize);
 
-            if receipt.is_some() {
-                println!("Tx hash: {:?}", receipt.unwrap().transaction_hash);
+                let tx = contract_with_signer.transfer(to_address.unwrap(), decimal_amount);
+                let pending_tx = tx.send().await.unwrap();
+                let receipt = pending_tx.await.unwrap();
+
+                if receipt.is_some() {
+                    println!("Tx hash: {:?}", receipt.unwrap().transaction_hash);
+                }
             }
         }
     }

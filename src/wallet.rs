@@ -50,7 +50,12 @@ pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error
 
     println!("Available balance: {}", balance_from);
 
-    let address_to = beneficiaries::select_beneficiary().unwrap();
+    let address_to = beneficiaries::select_beneficiary();
+
+    if address_to.is_none() {
+        return Ok(None);
+    }
+
     let mut value_str = String::new();
     utils::take_user_input("value", &mut value_str, "\n\nEnter amount to send in ETH:");
 
@@ -66,7 +71,7 @@ pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error
 
     let transaction_req: TypedTransaction = TransactionRequest::new()
         .from(address_from)
-        .to(address_to)
+        .to(address_to.unwrap())
         .value(U256::from(ethers::utils::parse_ether(value_str.trim())?))
         .into();
 
