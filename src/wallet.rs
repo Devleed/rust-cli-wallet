@@ -40,6 +40,7 @@ pub fn get_wallet() -> Option<Wallet<SigningKey>> {
 }
 pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error::Error>> {
     let wallet = get_wallet().unwrap();
+
     let provider = provider::get_provider();
     let client = SignerMiddleware::new(provider.clone(), wallet.clone());
 
@@ -56,8 +57,7 @@ pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error
         return Ok(None);
     }
 
-    let mut value_str = String::new();
-    utils::take_user_input("value", &mut value_str, "\n\nEnter amount to send in ETH:");
+    let mut value_str = utils::take_user_input("value", "\n\nEnter amount to send in ETH:");
 
     while value_str.trim().parse::<f64>()?.ge(&balance_from) {
         println!(
@@ -66,7 +66,7 @@ pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error
             value_str.trim()
         );
         value_str = String::new();
-        utils::take_user_input("value", &mut value_str, "Enter amount to send in ETH:");
+        value_str = utils::take_user_input("value", "Enter amount to send in ETH:");
     }
 
     let transaction_req: TypedTransaction = TransactionRequest::new()
@@ -92,10 +92,8 @@ pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error
         address_to
     );
 
-    let mut tx_confirmation = String::new();
-    utils::take_user_input(
+    let tx_confirmation = utils::take_user_input(
         "confirmation",
-        &mut tx_confirmation,
         "Are you sure you want to perform this transaction? [Y/N]",
     );
 

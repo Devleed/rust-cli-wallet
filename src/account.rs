@@ -136,28 +136,19 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) {
     }
 }
 fn create_new_acc(secret: Option<String>) -> (String, String) {
-    let mut password_string = String::new();
-    utils::take_user_input(
-        "Password",
-        &mut password_string,
-        "Enter password to protect account:",
-    );
+    let mut password_string =
+        utils::take_user_input("Password", "Enter password to protect account:");
 
     while password_string.trim().len() < 5 {
         println!("Password should be atleast of 6 characters");
-        utils::take_user_input(
-            "Password",
-            &mut password_string,
-            "Enter password to protect account:",
-        );
+        password_string = utils::take_user_input("Password", "Enter password to protect account:");
     }
 
-    let mut account_name = String::new();
-    utils::take_user_input("Account name", &mut account_name, "Enter account name:");
+    let mut account_name = utils::take_user_input("Account name", "Enter account name:");
 
     while account_name.trim().len() < 5 {
         println!("Invalid account name");
-        utils::take_user_input("Account name", &mut account_name, "Enter account name:");
+        account_name = utils::take_user_input("Account name", "Enter account name:");
     }
 
     account_name = String::from(account_name.trim());
@@ -169,18 +160,15 @@ fn create_new_acc(secret: Option<String>) -> (String, String) {
 
         println!("{}", phrase);
 
-        let mut confirmation = String::new();
-        utils::take_user_input(
+        let mut confirmation = utils::take_user_input(
             "confirmation",
-            &mut confirmation,
             "Have you saved this seed phrase somewhere? [y/n]",
         );
 
         while confirmation.trim() != "y" {
             println!("Please save this seed phrase somewhere");
-            utils::take_user_input(
+            confirmation = utils::take_user_input(
                 "confirmation",
-                &mut confirmation,
                 "Have you saved this seed phrase somewhere? [y/n]",
             );
         }
@@ -213,13 +201,8 @@ fn create_new_acc(secret: Option<String>) -> (String, String) {
     (account_key.clone(), account_name.clone())
 }
 fn take_secret_input() -> Option<String> {
-    let mut user_input = String::new();
-
-    utils::take_user_input(
-        "secret",
-        &mut user_input,
-        "\n\nEnter 12 word seed phrase or private key:",
-    );
+    let user_input =
+        utils::take_user_input("secret", "\n\nEnter 12 word seed phrase or private key:");
 
     let valid_secret = utils::validate_secret_input(&user_input);
 
@@ -242,12 +225,8 @@ fn import_wallet() {
     wallet::build_wallet(&account_key, networks::get_selected_chain_id());
 }
 fn create_wallet() {
-    let mut create_new_acc_confirmation = String::new();
-    utils::take_user_input(
-        "Confirmation",
-        &mut create_new_acc_confirmation,
-        "Do you want to create a new wallet? [Y/N]",
-    );
+    let create_new_acc_confirmation =
+        utils::take_user_input("Confirmation", "Do you want to create a new wallet? [Y/N]");
 
     if create_new_acc_confirmation.trim().to_lowercase() == "y" {
         // * create new wallet
@@ -262,14 +241,14 @@ fn select_wallet(acc_name: &str) {
     let mut file_name = String::from("accounts/");
     file_name.push_str(acc_name);
 
-    let mut keystore_path = String::from(file_name.clone());
+    let mut keystore_path = String::from(&file_name);
     keystore_path.push_str("/keystore.json");
 
     // * read file from given path
     let account_json = fs::read_to_string(keystore_path.trim()).expect("Failed to read account.");
 
     let mut password_string = String::new();
-    utils::take_user_input("Password", &mut password_string, "Enter password:");
+    let password_string = utils::take_user_input("Password", "Enter password:");
 
     let secret_key = keystore::deserialize_keystore(&account_json, password_string.trim());
 

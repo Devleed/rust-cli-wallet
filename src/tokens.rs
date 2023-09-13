@@ -22,8 +22,7 @@ pub async fn add_token() {
     let chain_id = networks::get_selected_chain_id();
     let account_name = account::get_account_name().unwrap();
 
-    let mut token_address = String::from("");
-    utils::take_user_input("Token address", &mut token_address, "Enter token address");
+    let token_address = utils::take_user_input("Token address", "Enter token address");
 
     let address: Address = token_address.trim().parse().unwrap();
 
@@ -126,8 +125,7 @@ pub async fn send_token(token: &Token) {
 
                 let user_balance = fetch_token_balance(token.address, wallet.address()).await;
 
-                let mut value = String::new();
-                utils::take_user_input("value", &mut value, "Enter amount to send:");
+                let mut value = utils::take_user_input("value", "Enter amount to send:");
 
                 while value.trim().parse::<f64>().unwrap().ge(&user_balance) {
                     println!(
@@ -138,7 +136,7 @@ pub async fn send_token(token: &Token) {
                         token.name
                     );
                     value = String::new();
-                    utils::take_user_input("value", &mut value, "Enter amount to send:");
+                    value = utils::take_user_input("value", "Enter amount to send:");
                 }
 
                 let decimal_amount = U256::from(value.trim().parse::<u64>().unwrap())

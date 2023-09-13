@@ -5,13 +5,17 @@ use dialoguer::{console::Term, theme::ColorfulTheme, Select};
 const SEED_PHRASE_LEN: usize = 12;
 const PKEY_LEN: usize = 64;
 
-pub fn take_user_input(key: &str, input: &mut String, msg: &str) {
+pub fn take_user_input(key: &str, msg: &str) -> String {
+    let mut input = String::new();
+
     println!("{}", msg);
     io::stdin()
-        .read_line(input)
+        .read_line(&mut input)
         .expect("Failed to take user input.");
 
     println!("\n{}: {}", key, input);
+
+    return input.clone();
 }
 pub fn is_pkey(secret: &str) -> bool {
     !secret.trim().contains(" ")
