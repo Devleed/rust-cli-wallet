@@ -65,7 +65,6 @@ pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error
             balance_from,
             value_str.trim()
         );
-        value_str = String::new();
         value_str = utils::take_user_input("value", "Enter amount to send in ETH:");
     }
 

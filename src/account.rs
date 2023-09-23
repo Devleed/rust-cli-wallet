@@ -15,13 +15,24 @@ lazy_static! {
 
 pub async fn launch_app() {
     // * read accounts from accounts directory
-    let accounts = fs::read_dir("accounts").expect("Failed to read directory");
+    let accounts = match fs::read_dir("accounts") {
+        Ok(entries) => Some(entries),
+        Err(err) => {
+            eprintln!("Error reading accounts directory: {}", err);
+            None
+        }
+    };
 
     // * convert to vector
-    let mut account_list = accounts
-        .filter_map(Result::ok)
-        .map(|entry| entry.file_name().into_string().unwrap())
-        .collect::<Vec<_>>();
+    let mut account_list = if accounts.is_none() {
+        Vec::new()
+    } else {
+        accounts
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|entry| entry.file_name().into_string().unwrap())
+            .collect::<Vec<_>>()
+    };
 
     // * add create new wallet option at the end of list
     account_list.push(String::from("Create new"));
@@ -35,15 +46,15 @@ pub async fn launch_app() {
         false,
     );
 
-    let selected_value = &account_list[selection.unwrap()].trim().to_lowercase();
+    let selected_value = &account_list[selection.unwrap()].trim();
 
     // * check the option selected
-    if selected_value == "create new" || selected_value == "import wallet" {
-        create_or_import_wallet(selected_value == "create new");
+    if *selected_value == "create new" || *selected_value == "import wallet" {
+        create_or_import_wallet(*selected_value == "create new");
     } else {
         // ? use selected account
 
-        select_wallet(&selected_value);
+        select_account(&selected_value);
         let wallet = wallet::get_wallet();
 
         if wallet.is_some() {
@@ -103,6 +114,7 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) {
         "Add token".to_string(),
         "Select token".to_string(),
         "Add beneficiary".to_string(),
+        "Change password".to_string(),
     ];
 
     let selection = utils::perform_selection("Authenticated dashboard", &mut items, None, false);
@@ -110,16 +122,20 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) {
     let selected_action = selection.unwrap();
 
     if selected_action == 0 {
+        // send eth flow
         wallet::send_eth().await.unwrap();
     } else if selected_action == 1 {
+        // change network flow
         networks::change_network_request();
     } else if selected_action == 2 {
+        // display user balance
         let balance = provider::fetch_balance(wallet.address()).await.unwrap();
         println!("balance: {} ETH", balance)
     } else if selected_action == 3 {
-        // * Add token
+        // add token flow
         tokens::add_token().await;
     } else if selected_action == 4 {
+        // select token flow
         let tokens: Vec<tokens::Token> = tokens::get_user_tokens();
         let mut token_names: Vec<String> =
             tokens.clone().into_iter().map(|token| token.name).collect();
@@ -132,7 +148,10 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) {
             launch_token_actions(selected_token).await;
         }
     } else if selected_action == 5 {
+        // add beneficiary flow
         beneficiaries::add_beneficiary();
+    } else if selected_action == 6 {
+        // change password flow
     }
 }
 fn create_new_acc(secret: Option<String>) -> (String, String) {
@@ -146,8 +165,7 @@ fn create_new_acc(secret: Option<String>) -> (String, String) {
 
     let mut account_name = utils::take_user_input("Account name", "Enter account name:");
 
-    while account_name.trim().len() < 5 {
-        println!("Invalid account name");
+    while account_name.trim().len() < 3 {
         account_name = utils::take_user_input("Account name", "Enter account name:");
     }
 
@@ -236,10 +254,12 @@ fn create_wallet() {
         wallet::build_wallet(&account_key, networks::get_selected_chain_id());
     }
 }
-fn select_wallet(acc_name: &str) {
+fn select_account(acc_name: &str) {
     // * create file path
     let mut file_name = String::from("accounts/");
     file_name.push_str(acc_name);
+
+    println!("path name {}", file_name);
 
     let mut keystore_path = String::from(&file_name);
     keystore_path.push_str("/keystore.json");
@@ -247,7 +267,6 @@ fn select_wallet(acc_name: &str) {
     // * read file from given path
     let account_json = fs::read_to_string(keystore_path.trim()).expect("Failed to read account.");
 
-    let mut password_string = String::new();
     let password_string = utils::take_user_input("Password", "Enter password:");
 
     let secret_key = keystore::deserialize_keystore(&account_json, password_string.trim());
@@ -260,3 +279,4 @@ fn select_wallet(acc_name: &str) {
 
     wallet::build_wallet(&secret_key, networks::get_selected_chain_id());
 }
+fn change_password() {}

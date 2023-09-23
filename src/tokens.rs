@@ -135,7 +135,6 @@ pub async fn send_token(token: &Token) {
                         value.trim(),
                         token.name
                     );
-                    value = String::new();
                     value = utils::take_user_input("value", "Enter amount to send:");
                 }
 
