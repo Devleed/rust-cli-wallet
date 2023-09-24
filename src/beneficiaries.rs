@@ -20,10 +20,11 @@ pub fn add_beneficiary() {
     let mut beneficiaries: HashMap<String, Address> =
         serde_json::from_str(beneficiaries_json.trim()).unwrap();
 
-    let beneficiary_name = utils::take_user_input("Beneficiary name", "Enter beneficiary name");
+    let beneficiary_name =
+        utils::take_user_input("Beneficiary name", "Enter beneficiary name", None);
 
     let beneficiary_address_str =
-        utils::take_user_input("Beneficiary address", "Enter beneficiary address");
+        utils::take_user_input("Beneficiary address", "Enter beneficiary address", None);
 
     let beneficiary_address: H160 = beneficiary_address_str.trim().parse().unwrap();
 

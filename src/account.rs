@@ -49,8 +49,8 @@ pub async fn launch_app() {
     let selected_value = &account_list[selection.unwrap()].trim();
 
     // * check the option selected
-    if *selected_value == "create new" || *selected_value == "import wallet" {
-        create_or_import_wallet(*selected_value == "create new");
+    if *selected_value == "Create new" || *selected_value == "Import wallet" {
+        create_or_import_wallet(*selected_value == "Create new");
     } else {
         // ? use selected account
 
@@ -155,21 +155,15 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) {
     }
 }
 fn create_new_acc(secret: Option<String>) -> (String, String) {
-    let mut password_string =
-        utils::take_user_input("Password", "Enter password to protect account:");
+    let password_string = utils::take_valid_password_input(
+        "Enter password to protect account: \n1. Password should be of atleast 6 characters.",
+    );
 
-    while password_string.trim().len() < 5 {
-        println!("Password should be atleast of 6 characters");
-        password_string = utils::take_user_input("Password", "Enter password to protect account:");
-    }
-
-    let mut account_name = utils::take_user_input("Account name", "Enter account name:");
-
-    while account_name.trim().len() < 3 {
-        account_name = utils::take_user_input("Account name", "Enter account name:");
-    }
-
-    account_name = String::from(account_name.trim());
+    let account_name = utils::take_user_input(
+        "Account name",
+        "Enter account name:\n1. Account name should be of atleast 3 characters.\n2. If the name of account already exists it will replace the old account with this one.",
+        Some(|val| val.trim().len().gt(&3)),
+    );
 
     let account_key = if secret.is_some() {
         secret.unwrap()
@@ -181,6 +175,7 @@ fn create_new_acc(secret: Option<String>) -> (String, String) {
         let mut confirmation = utils::take_user_input(
             "confirmation",
             "Have you saved this seed phrase somewhere? [y/n]",
+            None,
         );
 
         while confirmation.trim() != "y" {
@@ -188,6 +183,7 @@ fn create_new_acc(secret: Option<String>) -> (String, String) {
             confirmation = utils::take_user_input(
                 "confirmation",
                 "Have you saved this seed phrase somewhere? [y/n]",
+                None,
             );
         }
 
@@ -218,33 +214,28 @@ fn create_new_acc(secret: Option<String>) -> (String, String) {
 
     (account_key.clone(), account_name.clone())
 }
-fn take_secret_input() -> Option<String> {
-    let user_input =
-        utils::take_user_input("secret", "\n\nEnter 12 word seed phrase or private key:");
+fn take_secret_input() -> String {
+    let user_input = utils::take_user_input(
+        "secret",
+        "\n\nEnter 12 word seed phrase or private key:",
+        Some(|val| utils::validate_secret_input(val)),
+    );
 
-    let valid_secret = utils::validate_secret_input(&user_input);
-
-    if !valid_secret {
-        return None;
-    }
-
-    return Some(String::from(user_input.trim()));
+    return String::from(user_input.trim());
 }
 fn import_wallet() {
-    let mut secret = take_secret_input();
+    let secret = take_secret_input();
 
-    while secret.is_none() {
-        println!("Invalid seed phrase or private key.");
-        secret = take_secret_input();
-    }
-
-    let (account_key, _account_name) = create_new_acc(secret);
+    let (account_key, _account_name) = create_new_acc(Some(secret));
 
     wallet::build_wallet(&account_key, networks::get_selected_chain_id());
 }
 fn create_wallet() {
-    let create_new_acc_confirmation =
-        utils::take_user_input("Confirmation", "Do you want to create a new wallet? [Y/N]");
+    let create_new_acc_confirmation = utils::take_user_input(
+        "Confirmation",
+        "Do you want to create a new wallet? [Y/N]",
+        None,
+    );
 
     if create_new_acc_confirmation.trim().to_lowercase() == "y" {
         // * create new wallet
@@ -267,7 +258,7 @@ fn select_account(acc_name: &str) {
     // * read file from given path
     let account_json = fs::read_to_string(keystore_path.trim()).expect("Failed to read account.");
 
-    let password_string = utils::take_user_input("Password", "Enter password:");
+    let password_string = utils::take_user_input("Password", "Enter password:", None);
 
     let secret_key = keystore::deserialize_keystore(&account_json, password_string.trim());
 

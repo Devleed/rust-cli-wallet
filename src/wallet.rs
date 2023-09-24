@@ -57,7 +57,7 @@ pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error
         return Ok(None);
     }
 
-    let mut value_str = utils::take_user_input("value", "\n\nEnter amount to send in ETH:");
+    let mut value_str = utils::take_user_input("value", "\n\nEnter amount to send in ETH:", None);
 
     while value_str.trim().parse::<f64>()?.ge(&balance_from) {
         println!(
@@ -65,7 +65,7 @@ pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error
             balance_from,
             value_str.trim()
         );
-        value_str = utils::take_user_input("value", "Enter amount to send in ETH:");
+        value_str = utils::take_user_input("value", "Enter amount to send in ETH:", None);
     }
 
     let transaction_req: TypedTransaction = TransactionRequest::new()
@@ -94,6 +94,7 @@ pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error
     let tx_confirmation = utils::take_user_input(
         "confirmation",
         "Are you sure you want to perform this transaction? [Y/N]",
+        None,
     );
 
     if tx_confirmation.trim().to_lowercase() == "y" {
