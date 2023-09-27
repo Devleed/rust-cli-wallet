@@ -314,6 +314,7 @@ fn change_password() {
         change_password();
     }
 
+    println!("Unwrapping");
     let secret_key = result.unwrap();
 
     let new_password = utils::take_valid_password_input(
@@ -333,5 +334,5 @@ fn change_password() {
 
     create_account_file(&acc_name, &account_json);
 
-    println!("Password updated successfully.")
+    println!("Password updated successfully.");
 }
