@@ -2,9 +2,12 @@ use coins_bip32::prelude::SigningKey;
 use ethers::prelude::*;
 use ethers::signers::coins_bip39::{English, Mnemonic};
 use lazy_static::lazy_static;
-use std::fs;
+use std::fs::OpenOptions;
+use std::io::prelude::*;
 use std::sync::Mutex;
+use std::{fs, panic};
 
+use crate::utils::get_account_path;
 use crate::wallet::get_wallet;
 use crate::{beneficiaries, keystore, networks, provider, tokens, utils, wallet};
 
@@ -152,6 +155,7 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) {
         beneficiaries::add_beneficiary();
     } else if selected_action == 6 {
         // change password flow
+        change_password();
     }
 }
 fn create_new_acc(secret: Option<String>) -> (String, String) {
@@ -201,16 +205,7 @@ fn create_new_acc(secret: Option<String>) -> (String, String) {
 
     let account_json = keystore::serialize_keystore(&keystore);
 
-    let mut folder_name = String::from("accounts/");
-    folder_name.push_str(account_name.trim());
-
-    fs::create_dir(&folder_name).expect("Failed to create user account folder");
-
-    let mut file_name = String::from(folder_name);
-    file_name.push_str("/keystore.json");
-
-    fs::File::create(&file_name).expect("Failed to create file");
-    fs::write(&file_name, account_json.as_bytes()).expect("failed to write to file");
+    create_account_file(&account_name, &account_json);
 
     (account_key.clone(), account_name.clone())
 }
@@ -245,11 +240,12 @@ fn create_wallet() {
         wallet::build_wallet(&account_key, networks::get_selected_chain_id());
     }
 }
-fn select_account(acc_name: &str) {
+fn try_deserializing_account(
+    acc_name: &str,
+    password: &str,
+) -> Result<String, web3_keystore::KeyStoreError> {
     // * create file path
-    let mut file_name = String::from("accounts/");
-    file_name.push_str(acc_name);
-
+    let file_name = get_account_path(acc_name);
     println!("path name {}", file_name);
 
     let mut keystore_path = String::from(&file_name);
@@ -258,16 +254,84 @@ fn select_account(acc_name: &str) {
     // * read file from given path
     let account_json = fs::read_to_string(keystore_path.trim()).expect("Failed to read account.");
 
+    keystore::deserialize_keystore(&account_json, password)
+}
+fn select_account(acc_name: &str) {
     let password_string = utils::take_user_input("Password", "Enter password:", None);
 
-    let secret_key = keystore::deserialize_keystore(&account_json, password_string.trim());
+    let secret_key = try_deserializing_account(acc_name, &password_string);
 
-    let mut data = ACCOUNT_KEY.lock().unwrap();
-    *data = Some(secret_key.clone());
+    if secret_key.is_ok() {
+        let mut data = ACCOUNT_KEY.lock().unwrap();
+        *data = Some(secret_key.as_ref().unwrap().clone());
 
-    let mut account_name = ACCOUNT_NAME.lock().unwrap();
-    *account_name = Some(acc_name.to_string());
+        let mut account_name = ACCOUNT_NAME.lock().unwrap();
+        *account_name = Some(acc_name.to_string());
 
-    wallet::build_wallet(&secret_key, networks::get_selected_chain_id());
+        wallet::build_wallet(&secret_key.unwrap(), networks::get_selected_chain_id());
+    } else {
+        let error = secret_key.err();
+
+        if keystore::is_wrong_password(error.unwrap()) {
+            println!("Wrong password, please try again.");
+            select_account(acc_name)
+        } else {
+            panic!("Something went wrong.");
+        }
+    }
 }
-fn change_password() {}
+fn create_account_file(account_name: &str, account_json: &str) {
+    let mut folder_name = String::from("accounts/");
+    folder_name.push_str(account_name.trim());
+
+    if fs::metadata(&folder_name).is_err() {
+        fs::create_dir(&folder_name).expect("Failed to create user account folder");
+    }
+
+    let mut file_path = String::from(folder_name);
+    file_path.push_str("/keystore.json");
+
+    // if fs::metadata(&file_path).is_ok() {
+    //     fs::remove_file(&file_path).expect("Failed to remove the existing account file.");
+    // }
+
+    // Create and open the file with write mode
+    let mut created_file =
+        fs::File::create(file_path).expect("Failed to create user account file.");
+
+    created_file
+        .write_all(account_json.as_bytes())
+        .expect("failed to write to file");
+}
+fn change_password() {
+    let old_password = utils::take_valid_password_input("Enter old password");
+    let acc_name = get_account_name().unwrap();
+
+    let result = try_deserializing_account(&acc_name, &old_password);
+
+    if result.is_err() {
+        println!("Wrong password, try again.");
+        change_password();
+    }
+
+    let secret_key = result.unwrap();
+
+    let new_password = utils::take_valid_password_input(
+        "Enter new password: \n1. Password should be of atleast 6 characters.",
+    );
+
+    let keystore = web3_keystore::encrypt(
+        &mut rand::thread_rng(),
+        &secret_key,
+        new_password.trim(),
+        None,
+        Some(acc_name.clone()),
+    )
+    .unwrap();
+
+    let account_json = keystore::serialize_keystore(&keystore);
+
+    create_account_file(&acc_name, &account_json);
+
+    println!("Password updated successfully.")
+}

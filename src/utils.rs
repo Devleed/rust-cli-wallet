@@ -82,3 +82,9 @@ pub fn take_valid_password_input(msg: &str) -> String {
 
     password_string
 }
+pub fn get_account_path(acc_name: &str) -> String {
+    let mut file_name = String::from("accounts/");
+    file_name.push_str(acc_name);
+
+    file_name
+}
