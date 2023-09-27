@@ -5,7 +5,7 @@ use dialoguer::{console::Term, theme::ColorfulTheme, Select};
 const SEED_PHRASE_LEN: usize = 12;
 const PKEY_LEN: usize = 64;
 
-pub fn take_user_input(key: &str, msg: &str) -> String {
+pub fn take_user_input(key: &str, msg: &str, validator: Option<fn(&str) -> bool>) -> String {
     let mut input = String::new();
 
     println!("{}", msg);
@@ -15,7 +15,17 @@ pub fn take_user_input(key: &str, msg: &str) -> String {
 
     println!("\n{}: {}", key, input);
 
-    return input.clone();
+    if validator.is_some() {
+        while !validator.unwrap()(&input) {
+            println!("Invalid {}", key.to_lowercase());
+            input = String::new();
+            io::stdin()
+                .read_line(&mut input)
+                .expect("Failed to take user input.");
+        }
+    }
+
+    return String::from(input.trim());
 }
 pub fn is_pkey(secret: &str) -> bool {
     !secret.trim().contains(" ")
@@ -66,4 +76,15 @@ pub fn perform_selection(
     }
 
     Some(selection.unwrap())
+}
+pub fn take_valid_password_input(msg: &str) -> String {
+    let password_string = take_user_input("Password", msg, Some(|val| val.trim().len().ge(&5)));
+
+    password_string
+}
+pub fn get_account_path(acc_name: &str) -> String {
+    let mut file_name = String::from("accounts/");
+    file_name.push_str(acc_name);
+
+    file_name
 }
