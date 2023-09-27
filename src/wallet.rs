@@ -30,13 +30,16 @@ pub fn build_wallet(account_key: &str, chain_id: u8) {
             .with_chain_id(chain_id)
     };
 
-    let mut data = WALLET.lock().unwrap();
-    *data = Some(wallet);
+    set_wallet(Some(wallet));
 }
 pub fn get_wallet() -> Option<Wallet<SigningKey>> {
     let wallet = WALLET.lock().unwrap();
 
     wallet.clone()
+}
+pub fn set_wallet(wallet: Option<Wallet<SigningKey>>) {
+    let mut data = WALLET.lock().unwrap();
+    *data = wallet;
 }
 pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error::Error>> {
     let wallet = get_wallet().unwrap();
