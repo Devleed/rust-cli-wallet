@@ -2,7 +2,6 @@ use coins_bip32::prelude::SigningKey;
 use ethers::prelude::*;
 use ethers::signers::coins_bip39::{English, Mnemonic};
 use lazy_static::lazy_static;
-use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::sync::Mutex;
 use std::{fs, panic};
@@ -66,7 +65,10 @@ pub async fn launch_app() {
             println!("wallet: {:?}", wallet.address());
 
             loop {
-                launch_authenticated_dashboard(&wallet).await;
+                let res = launch_authenticated_dashboard(&wallet).await;
+                if res {
+                    break;
+                }
             }
         }
     }
@@ -76,10 +78,18 @@ pub fn get_account_key() -> Option<String> {
 
     data.clone()
 }
+pub fn set_account_key(key: Option<String>) {
+    let mut data = ACCOUNT_KEY.lock().unwrap();
+    *data = key;
+}
 pub fn get_account_name() -> Option<String> {
     let data = ACCOUNT_NAME.lock().expect("Failed to lock acc name");
 
     data.clone()
+}
+pub fn set_account_name(name: Option<String>) {
+    let mut data = ACCOUNT_NAME.lock().unwrap();
+    *data = name;
 }
 pub async fn launch_token_actions(token: &tokens::Token) {
     loop {
@@ -109,7 +119,7 @@ fn create_or_import_wallet(create_new: bool) {
         create_wallet();
     }
 }
-async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) {
+async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) -> bool {
     let mut items = vec![
         "Send eth".to_string(),
         "Change network".to_string(),
@@ -118,6 +128,7 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) {
         "Select token".to_string(),
         "Add beneficiary".to_string(),
         "Change password".to_string(),
+        "Delete account (danger)".to_string(),
     ];
 
     let selection = utils::perform_selection("Authenticated dashboard", &mut items, None, false);
@@ -127,16 +138,20 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) {
     if selected_action == 0 {
         // send eth flow
         wallet::send_eth().await.unwrap();
+        return false;
     } else if selected_action == 1 {
         // change network flow
         networks::change_network_request();
+        return false;
     } else if selected_action == 2 {
         // display user balance
         let balance = provider::fetch_balance(wallet.address()).await.unwrap();
-        println!("balance: {} ETH", balance)
+        println!("balance: {} ETH", balance);
+        return false;
     } else if selected_action == 3 {
         // add token flow
         tokens::add_token().await;
+        return false;
     } else if selected_action == 4 {
         // select token flow
         let tokens: Vec<tokens::Token> = tokens::get_user_tokens();
@@ -150,13 +165,21 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) {
             let selected_token = &tokens[selection.unwrap()];
             launch_token_actions(selected_token).await;
         }
+        return false;
     } else if selected_action == 5 {
         // add beneficiary flow
         beneficiaries::add_beneficiary();
+        return false;
     } else if selected_action == 6 {
         // change password flow
         change_password();
+        return false;
+    } else if selected_action == 7 {
+        delete_account();
+        return true;
     }
+
+    return false;
 }
 fn create_new_acc(secret: Option<String>) -> (String, String) {
     let password_string = utils::take_valid_password_input(
@@ -262,11 +285,8 @@ fn select_account(acc_name: &str) {
     let secret_key = try_deserializing_account(acc_name, &password_string);
 
     if secret_key.is_ok() {
-        let mut data = ACCOUNT_KEY.lock().unwrap();
-        *data = Some(secret_key.as_ref().unwrap().clone());
-
-        let mut account_name = ACCOUNT_NAME.lock().unwrap();
-        *account_name = Some(acc_name.to_string());
+        set_account_key(Some(secret_key.as_ref().unwrap().clone()));
+        set_account_name(Some(acc_name.to_string()));
 
         wallet::build_wallet(&secret_key.unwrap(), networks::get_selected_chain_id());
     } else {
@@ -291,11 +311,6 @@ fn create_account_file(account_name: &str, account_json: &str) {
     let mut file_path = String::from(folder_name);
     file_path.push_str("/keystore.json");
 
-    // if fs::metadata(&file_path).is_ok() {
-    //     fs::remove_file(&file_path).expect("Failed to remove the existing account file.");
-    // }
-
-    // Create and open the file with write mode
     let mut created_file =
         fs::File::create(file_path).expect("Failed to create user account file.");
 
@@ -304,18 +319,9 @@ fn create_account_file(account_name: &str, account_json: &str) {
         .expect("failed to write to file");
 }
 fn change_password() {
-    let old_password = utils::take_valid_password_input("Enter old password");
     let acc_name = get_account_name().unwrap();
 
-    let result = try_deserializing_account(&acc_name, &old_password);
-
-    if result.is_err() {
-        println!("Wrong password, try again.");
-        change_password();
-    }
-
-    println!("Unwrapping");
-    let secret_key = result.unwrap();
+    let secret_key = authenticate_account(&acc_name);
 
     let new_password = utils::take_valid_password_input(
         "Enter new password: \n1. Password should be of atleast 6 characters.",
@@ -335,4 +341,32 @@ fn change_password() {
     create_account_file(&acc_name, &account_json);
 
     println!("Password updated successfully.");
+}
+fn delete_account() {
+    let acc_name = get_account_name().unwrap();
+
+    authenticate_account(&acc_name);
+
+    let account_path = get_account_path(&acc_name);
+
+    fs::remove_dir_all(&account_path).expect("Failed to delete account.");
+
+    set_account_key(None);
+    set_account_name(None);
+    wallet::set_wallet(None);
+}
+fn authenticate_account(acc_name: &str) -> String {
+    let old_password = utils::take_valid_password_input("Enter password");
+
+    let result = try_deserializing_account(acc_name, &old_password);
+
+    println!("result :{:?}", result);
+
+    if result.is_err() {
+        println!("Wrong password, try again.");
+        return authenticate_account(acc_name);
+    }
+
+    println!("Unwrapping");
+    result.unwrap().clone()
 }
