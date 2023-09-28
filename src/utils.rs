@@ -1,11 +1,18 @@
 use std::io;
 
+use colored::Colorize;
 use dialoguer::{console::Term, theme::ColorfulTheme, Select};
 use rpassword::read_password;
 use std::io::Write;
 
 const SEED_PHRASE_LEN: usize = 12;
 const PKEY_LEN: usize = 64;
+
+pub enum LogSeverity {
+    INFO,
+    WARN,
+    ERROR,
+}
 
 pub fn take_user_input(key: &str, msg: &str, validator: Option<fn(&str) -> bool>) -> String {
     let mut input = String::new();
@@ -19,7 +26,7 @@ pub fn take_user_input(key: &str, msg: &str, validator: Option<fn(&str) -> bool>
 
     if validator.is_some() {
         while !validator.unwrap()(&input) {
-            println!("Invalid {}", key.to_lowercase());
+            println!("{} {}", "Invalid".red(), key.to_lowercase().red());
             input = String::new();
             io::stdin()
                 .read_line(&mut input)
@@ -80,12 +87,15 @@ pub fn perform_selection(
     Some(selection.unwrap())
 }
 pub fn take_valid_password_input(msg: &str) -> String {
-    println!("{}", msg);
+    log(msg, Some(LogSeverity::WARN));
     std::io::stdout().flush().unwrap();
     let password = read_password().unwrap();
 
     while !password.trim().len().ge(&5) {
-        println!("password should be greater than or equal to 6 characters.");
+        log(
+            "password should be greater than or equal to 6 characters.",
+            Some(LogSeverity::ERROR),
+        );
         return take_valid_password_input(msg);
     }
 
@@ -96,4 +106,27 @@ pub fn get_account_path(acc_name: &str) -> String {
     file_name.push_str(acc_name);
 
     file_name
+}
+pub fn is_valid_ethereum_address(address: &str) -> bool {
+    address.len().eq(&42)
+}
+
+pub fn log(msg: &str, severity: Option<LogSeverity>) {
+    if severity.is_none() {
+        println!("{}", msg);
+    } else {
+        let severity = severity.unwrap();
+
+        match severity {
+            LogSeverity::INFO => {
+                println!("{} {}", "[INFO]".bright_green(), msg.bright_green());
+            }
+            LogSeverity::WARN => {
+                println!("{} {}", "[WARN]".yellow(), msg.yellow());
+            }
+            LogSeverity::ERROR => {
+                eprintln!("{} {}", "[ERROR]".red(), msg.red());
+            }
+        }
+    }
 }

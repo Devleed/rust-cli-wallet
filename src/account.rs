@@ -6,7 +6,7 @@ use std::io::prelude::*;
 use std::sync::Mutex;
 use std::{fs, panic};
 
-use crate::utils::get_account_path;
+use crate::utils::{get_account_path, log, LogSeverity};
 use crate::wallet::get_wallet;
 use crate::{beneficiaries, keystore, networks, provider, tokens, utils, wallet};
 
@@ -63,6 +63,7 @@ pub async fn launch_app() {
             let wallet = wallet.unwrap();
 
             println!("wallet: {:?}", wallet.address());
+            log("Logged in successfully", Some(LogSeverity::INFO));
 
             loop {
                 let res = launch_authenticated_dashboard(&wallet).await;
@@ -206,7 +207,10 @@ fn create_new_acc(secret: Option<String>) -> (String, String) {
         );
 
         while confirmation.trim() != "y" {
-            println!("Please save this seed phrase somewhere");
+            log(
+                "Please save this seed phrase somewhere",
+                Some(LogSeverity::INFO),
+            );
             confirmation = utils::take_user_input(
                 "confirmation",
                 "Have you saved this seed phrase somewhere? [y/n]",
@@ -280,7 +284,7 @@ fn try_deserializing_account(
     keystore::deserialize_keystore(&account_json, password)
 }
 fn select_account(acc_name: &str) {
-    let password_string = utils::take_user_input("Password", "Enter password:", None);
+    let password_string = utils::take_valid_password_input("Enter password:");
 
     let secret_key = try_deserializing_account(acc_name, &password_string);
 
@@ -293,7 +297,10 @@ fn select_account(acc_name: &str) {
         let error = secret_key.err();
 
         if keystore::is_wrong_password(error.unwrap()) {
-            println!("Wrong password, please try again.");
+            log(
+                "Wrong password, please try again.",
+                Some(LogSeverity::ERROR),
+            );
             select_account(acc_name)
         } else {
             panic!("Something went wrong.");
@@ -340,7 +347,7 @@ fn change_password() {
 
     create_account_file(&acc_name, &account_json);
 
-    println!("Password updated successfully.");
+    log("Password updated successfully.", Some(LogSeverity::INFO));
 }
 fn delete_account() {
     let acc_name = get_account_name().unwrap();
@@ -360,13 +367,13 @@ fn authenticate_account(acc_name: &str) -> String {
 
     let result = try_deserializing_account(acc_name, &old_password);
 
-    println!("result :{:?}", result);
-
     if result.is_err() {
-        println!("Wrong password, try again.");
+        log(
+            "Wrong password, please try again.",
+            Some(LogSeverity::ERROR),
+        );
         return authenticate_account(acc_name);
     }
 
-    println!("Unwrapping");
     result.unwrap().clone()
 }
