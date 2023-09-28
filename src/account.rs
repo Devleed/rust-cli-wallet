@@ -311,11 +311,6 @@ fn create_account_file(account_name: &str, account_json: &str) {
     let mut file_path = String::from(folder_name);
     file_path.push_str("/keystore.json");
 
-    // if fs::metadata(&file_path).is_ok() {
-    //     fs::remove_file(&file_path).expect("Failed to remove the existing account file.");
-    // }
-
-    // Create and open the file with write mode
     let mut created_file =
         fs::File::create(file_path).expect("Failed to create user account file.");
 
@@ -361,7 +356,7 @@ fn delete_account() {
     wallet::set_wallet(None);
 }
 fn authenticate_account(acc_name: &str) -> String {
-    let old_password = utils::take_valid_password_input("Enter old password");
+    let old_password = utils::take_valid_password_input("Enter password");
 
     let result = try_deserializing_account(acc_name, &old_password);
 
