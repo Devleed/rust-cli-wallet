@@ -1,6 +1,8 @@
 use std::io;
 
 use dialoguer::{console::Term, theme::ColorfulTheme, Select};
+use rpassword::read_password;
+use std::io::Write;
 
 const SEED_PHRASE_LEN: usize = 12;
 const PKEY_LEN: usize = 64;
@@ -78,9 +80,16 @@ pub fn perform_selection(
     Some(selection.unwrap())
 }
 pub fn take_valid_password_input(msg: &str) -> String {
-    let password_string = take_user_input("Password", msg, Some(|val| val.trim().len().ge(&5)));
+    println!("{}", msg);
+    std::io::stdout().flush().unwrap();
+    let password = read_password().unwrap();
 
-    password_string
+    while !password.trim().len().ge(&5) {
+        println!("password should be greater than or equal to 6 characters.");
+        return take_valid_password_input(msg);
+    }
+
+    password
 }
 pub fn get_account_path(acc_name: &str) -> String {
     let mut file_name = String::from("accounts/");
