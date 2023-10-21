@@ -1,3 +1,4 @@
+use crate::utils::is_valid_ethereum_address;
 use crate::{beneficiaries, provider, utils};
 use coins_bip32::prelude::SigningKey;
 use ethers::prelude::*;
@@ -50,26 +51,39 @@ pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error
     let address_from = wallet.address();
 
     let balance_from = provider::fetch_balance(address_from).await?;
-    let gas_price = provider::fetch_gas_price().await?;
 
     println!("Available balance: {}", balance_from);
 
-    let address_to = beneficiaries::select_beneficiary();
+    let mut send_options = vec!["select beneficiary".to_string(), "type address".to_string()];
+
+    let selected_option = utils::perform_selection("Send options", &mut send_options, None, true);
+
+    let address_to = if selected_option.is_some() {
+        if selected_option.unwrap() == 0 {
+            // select beneficiary
+            beneficiaries::select_beneficiary()
+        } else {
+            // take address input
+            Some(
+                utils::take_user_input(
+                    "Address",
+                    "Type recipient address",
+                    Some(is_valid_ethereum_address),
+                )
+                .trim()
+                .parse::<H160>()
+                .unwrap(),
+            )
+        }
+    } else {
+        None
+    };
 
     if address_to.is_none() {
         return Ok(None);
     }
 
-    let mut value_str = utils::take_user_input("value", "\n\nEnter amount to send in ETH:", None);
-
-    while value_str.trim().parse::<f64>()?.ge(&balance_from) {
-        println!(
-            "Amount limit exceeded, sender has {} ETH and you're trying to send {} ETH \n",
-            balance_from,
-            value_str.trim()
-        );
-        value_str = utils::take_user_input("value", "Enter amount to send in ETH:", None);
-    }
+    let mut value_str = utils::take_user_input("value", "Enter amount to send in ETH:", None);
 
     let transaction_req: TypedTransaction = TransactionRequest::new()
         .from(address_from)
@@ -77,21 +91,31 @@ pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error
         .value(U256::from(ethers::utils::parse_ether(value_str.trim())?))
         .into();
 
-    let estimated_gas = provider
-        .estimate_gas(&transaction_req, None)
-        .await?
-        .to_string()
+    let tx_cost = provider::estimate_gas(&transaction_req)
+        .await
+        .trim()
         .parse::<f64>()?;
 
-    let tx_cost = gas_price * estimated_gas;
-
     println!("tx cost: {} ETH", tx_cost);
+
+    let mut parsed_val = value_str.trim().parse::<f64>()? + tx_cost;
+
+    while parsed_val.ge(&balance_from) {
+        println!(
+            "Amount limit exceeded, sender has {} ETH and you're trying to send {} ETH with {} ETH tx cost. \n",
+            balance_from,
+            value_str.trim(),
+            parsed_val
+        );
+        value_str = utils::take_user_input("value", "Enter amount to send in ETH:", None);
+        parsed_val = value_str.trim().parse::<f64>()? + tx_cost;
+    }
 
     println!(
         "\nSending {} ETH from {:?} to {:?}\n",
         value_str.trim(),
         address_from,
-        address_to
+        address_to.unwrap()
     );
 
     let tx_confirmation = utils::take_user_input(

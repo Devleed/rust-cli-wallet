@@ -108,7 +108,7 @@ pub fn get_account_path(acc_name: &str) -> String {
     file_name
 }
 pub fn is_valid_ethereum_address(address: &str) -> bool {
-    address.len().eq(&42)
+    address.trim().len().eq(&42)
 }
 
 pub fn log(msg: &str, severity: Option<LogSeverity>) {

@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::beneficiaries;
 use crate::utils::get_account_path;
 use crate::utils::is_valid_ethereum_address;
+use crate::utils::take_user_input;
 use crate::wallet;
 use crate::{account, ierc20::IERC20, networks, provider, utils};
 use std::{fs, sync::Arc};
@@ -105,8 +106,13 @@ pub async fn fetch_token_balance(token_address: H160, user_address: H160) -> f64
                 .balance_of(user_address)
                 .await
                 .expect("Failed to fetch user token balance");
+            let decimals: usize = contract_without_signer
+                .decimals()
+                .await
+                .expect("Failed to fetch token decimals")
+                .into();
 
-            ethers::utils::format_units(balance, "ether")
+            ethers::utils::format_units(balance, decimals)
                 .unwrap()
                 .trim()
                 .parse::<f64>()
@@ -171,12 +177,23 @@ pub async fn send_token(token: &Token) {
                 let decimal_amount = U256::from(value.trim().parse::<u64>().unwrap())
                     * U256::exp10(token.decimals as usize);
 
-                let tx = contract_with_signer.transfer(to_address.unwrap(), decimal_amount);
-                let pending_tx = tx.send().await.unwrap();
-                let receipt = pending_tx.await.unwrap();
+                let mut tx = contract_with_signer.transfer(to_address.unwrap(), decimal_amount);
 
-                if receipt.is_some() {
-                    println!("Tx hash: {:?}", receipt.unwrap().transaction_hash);
+                tx = tx.from(wallet.address());
+
+                let tx_cost = provider::estimate_gas(&tx.tx).await;
+
+                println!("It'll cost you around {} ETH for this transaction, are you sure you want to continue. [Y/N]", tx_cost);
+
+                let tx_confirmation = take_user_input("Transaction confirmation", "", None);
+
+                if tx_confirmation.to_lowercase() == "y" {
+                    let pending_tx = tx.send().await.unwrap();
+                    let receipt = pending_tx.await.unwrap();
+
+                    if receipt.is_some() {
+                        println!("Tx hash: {:?}", receipt.unwrap().transaction_hash);
+                    }
                 }
             }
         }

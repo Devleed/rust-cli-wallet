@@ -6,7 +6,7 @@ use std::sync::Mutex;
 
 use crate::{account, provider, utils, wallet};
 
-pub const DEFAULT_SELECTED_CHAINID: u8 = 5;
+pub const DEFAULT_SELECTED_CHAINID: u8 = 1;
 
 #[derive(Deserialize)]
 struct Network {
@@ -56,6 +56,12 @@ pub fn change_network_request() {
 pub fn get_selected_chain_id() -> u8 {
     let data = SELECTED_NETWORK.lock().unwrap();
     data.clone()
+}
+pub fn get_selected_chain_name() -> String {
+    let network_names = get_chain_names();
+    let chain_id: usize = get_selected_chain_id().into();
+
+    network_names[chain_id].clone()
 }
 
 /* PRIVATE FUNCTIONS */

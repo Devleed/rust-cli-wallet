@@ -61,9 +61,11 @@ pub async fn launch_app() {
 
         if wallet.is_some() {
             let wallet = wallet.unwrap();
+            let connected_network = networks::get_selected_chain_name();
 
-            println!("wallet: {:?}", wallet.address());
             log("Logged in successfully", Some(LogSeverity::INFO));
+            println!("wallet address: {:?}", wallet.address());
+            println!("connected network: {}", connected_network);
 
             loop {
                 let res = launch_authenticated_dashboard(&wallet).await;
