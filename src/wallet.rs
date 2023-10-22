@@ -1,4 +1,4 @@
-use crate::utils::{is_valid_ethereum_address, log, LogSeverity};
+use crate::utils::{is_valid_ethereum_address, launch_tx_thread, log_tx};
 use crate::{beneficiaries, provider, utils};
 use coins_bip32::prelude::SigningKey;
 use ethers::prelude::*;
@@ -8,10 +8,7 @@ use ethers::{
     types::{transaction::eip2718::TypedTransaction, TransactionReceipt, TransactionRequest},
 };
 use lazy_static::lazy_static;
-use spinners::{Spinner, Spinners};
 use std::sync::Mutex;
-use std::thread::{self, sleep};
-use std::time::Duration;
 
 lazy_static! {
     static ref WALLET: Mutex<Option<Wallet<SigningKey>>> = Mutex::new(None);
@@ -123,24 +120,17 @@ pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error
     );
 
     if tx_confirmation.trim().to_lowercase() == "y" {
-        log(
-            "Transaction added to queue. You'll be notified once successful or failed.",
-            Some(LogSeverity::INFO),
-        );
+        launch_tx_thread(async move {
+            let sent_tx = client
+                .send_transaction(transaction_req, None)
+                .await
+                .unwrap()
+                .await
+                .unwrap();
 
-        thread::spawn(move || {
-            tokio::runtime::Runtime::new().unwrap().block_on(async {
-                let sent_tx = client
-                    .send_transaction(transaction_req, None)
-                    .await
-                    .unwrap()
-                    .await
-                    .unwrap();
+            let receipt = sent_tx.expect("failed to send transaction");
 
-                let receipt = sent_tx.expect("failed to send transaction");
-
-                println!("Tx hash: {:?}", receipt.transaction_hash);
-            })
+            log_tx(Some(receipt))
         });
 
         Ok(None)

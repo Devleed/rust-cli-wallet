@@ -1,7 +1,8 @@
-use std::io;
+use std::{future::Future, io, thread};
 
 use colored::Colorize;
 use dialoguer::{console::Term, theme::ColorfulTheme, Select};
+use ethers::types::TransactionReceipt;
 use rpassword::read_password;
 use std::io::Write;
 
@@ -129,4 +130,34 @@ pub fn log(msg: &str, severity: Option<LogSeverity>) {
             }
         }
     }
+}
+pub fn launch_tx_thread<F>(future: F)
+where
+    F: Future<Output = ()> + Send + 'static,
+{
+    log(
+        "Transaction added to queue. You'll be notified once successful or failed.",
+        Some(LogSeverity::INFO),
+    );
+
+    // ? `move` keywords moves gives closure the ownership of tx variable. It'll not be accessible outside the clousure.
+    thread::spawn(move || {
+        /*
+        ? To run the asynchronous code inside the thread, we use tokio::runtime::Runtime::new().unwrap().block_on(async { ... }). This allows you to use Tokio's runtime to execute asynchronous code within the thread.
+        */
+        tokio::runtime::Runtime::new().unwrap().block_on(future);
+    });
+}
+pub fn log_tx(receipt: Option<TransactionReceipt>) {
+    let msg = if receipt.is_some() {
+        (
+            "Transaction successful. Transaction hash:",
+            LogSeverity::INFO,
+        )
+    } else {
+        ("Transaction failed. Transaction hash:", LogSeverity::ERROR)
+    };
+
+    log(msg.0, Some(msg.1));
+    println!("{:?}", receipt.unwrap().transaction_hash);
 }
