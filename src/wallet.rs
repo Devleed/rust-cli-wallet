@@ -1,4 +1,4 @@
-use crate::utils::is_valid_ethereum_address;
+use crate::utils::{is_valid_ethereum_address, log, LogSeverity};
 use crate::{beneficiaries, provider, utils};
 use coins_bip32::prelude::SigningKey;
 use ethers::prelude::*;
@@ -10,7 +10,7 @@ use ethers::{
 use lazy_static::lazy_static;
 use spinners::{Spinner, Spinners};
 use std::sync::Mutex;
-use std::thread::sleep;
+use std::thread::{self, sleep};
 use std::time::Duration;
 
 lazy_static! {
@@ -96,8 +96,6 @@ pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error
         .trim()
         .parse::<f64>()?;
 
-    println!("tx cost: {} ETH", tx_cost);
-
     let mut parsed_val = value_str.trim().parse::<f64>()? + tx_cost;
 
     while parsed_val.ge(&balance_from) {
@@ -125,20 +123,27 @@ pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error
     );
 
     if tx_confirmation.trim().to_lowercase() == "y" {
-        let mut sp = Spinner::new(Spinners::Dots9, "Transaction pending".into());
-        sleep(Duration::from_secs(3));
-        sp.stop();
+        log(
+            "Transaction added to queue. You'll be notified once successful or failed.",
+            Some(LogSeverity::INFO),
+        );
 
-        let sent_tx = client
-            .send_transaction(transaction_req, None)
-            .await?
-            .await?;
+        thread::spawn(move || {
+            tokio::runtime::Runtime::new().unwrap().block_on(async {
+                let sent_tx = client
+                    .send_transaction(transaction_req, None)
+                    .await
+                    .unwrap()
+                    .await
+                    .unwrap();
 
-        let receipt = sent_tx.expect("failed to send transaction");
+                let receipt = sent_tx.expect("failed to send transaction");
 
-        println!("Tx hash: {:?}", receipt.transaction_hash);
+                println!("Tx hash: {:?}", receipt.transaction_hash);
+            })
+        });
 
-        Ok(Some(receipt))
+        Ok(None)
     } else {
         Ok(None)
     }

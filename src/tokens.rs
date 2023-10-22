@@ -8,9 +8,12 @@ use serde::{Deserialize, Serialize};
 use crate::beneficiaries;
 use crate::utils::get_account_path;
 use crate::utils::is_valid_ethereum_address;
+use crate::utils::log;
 use crate::utils::take_user_input;
+use crate::utils::LogSeverity;
 use crate::wallet;
 use crate::{account, ierc20::IERC20, networks, provider, utils};
+use std::thread;
 use std::{fs, sync::Arc};
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -188,12 +191,34 @@ pub async fn send_token(token: &Token) {
                 let tx_confirmation = take_user_input("Transaction confirmation", "", None);
 
                 if tx_confirmation.to_lowercase() == "y" {
-                    let pending_tx = tx.send().await.unwrap();
-                    let receipt = pending_tx.await.unwrap();
+                    log(
+                        "Transaction added to queue. You'll be notified once successful or failed.",
+                        Some(LogSeverity::INFO),
+                    );
 
-                    if receipt.is_some() {
-                        println!("Tx hash: {:?}", receipt.unwrap().transaction_hash);
-                    }
+                    // ? `move` keywords moves gives closure the ownership of tx variable. It'll not be accessible outside the clousure.
+                    thread::spawn(move || {
+                        /*
+                        ? To run the asynchronous code inside the thread, we use tokio::runtime::Runtime::new().unwrap().block_on(async { ... }). This allows you to use Tokio's runtime to execute asynchronous code within the thread.
+                        */
+                        tokio::runtime::Runtime::new().unwrap().block_on(async {
+                            let pending_tx = tx.send().await.unwrap();
+
+                            let receipt = pending_tx.await.unwrap();
+
+                            let msg = if receipt.is_some() {
+                                (
+                                    "Transaction successful. Transaction hash:",
+                                    LogSeverity::INFO,
+                                )
+                            } else {
+                                ("Transaction failed. Transaction hash:", LogSeverity::ERROR)
+                            };
+
+                            log(msg.0, Some(msg.1));
+                            println!("{:?}", receipt.unwrap().transaction_hash);
+                        });
+                    });
                 }
             }
         }
