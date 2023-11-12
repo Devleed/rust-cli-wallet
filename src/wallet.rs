@@ -1,3 +1,4 @@
+use crate::provider::gas_price_selector;
 use crate::utils::{is_valid_ethereum_address, launch_tx_thread, log_tx};
 use crate::{beneficiaries, provider, utils};
 use coins_bip32::prelude::SigningKey;
@@ -88,7 +89,9 @@ pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error
         .value(U256::from(ethers::utils::parse_ether(value_str.trim())?))
         .into();
 
-    let tx_cost = provider::estimate_gas(&transaction_req)
+    let selected_gas_price = gas_price_selector().await;
+
+    let tx_cost = provider::estimate_gas(&transaction_req, Some(selected_gas_price))
         .await
         .trim()
         .parse::<f64>()?;

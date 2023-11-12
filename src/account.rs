@@ -132,6 +132,7 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) -> bool {
         "Add beneficiary".to_string(),
         "Change password".to_string(),
         "Delete account (danger)".to_string(),
+        // "Check gas prices".to_string(),
     ];
 
     let selection = utils::perform_selection("Authenticated dashboard", &mut items, None, false);
@@ -181,6 +182,10 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) -> bool {
         delete_account();
         return true;
     }
+    //  else if selected_action == 8 {
+    //     provider::get_network_gas_prices().await;
+    //     return false;
+    // }
 
     return false;
 }
