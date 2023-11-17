@@ -186,7 +186,7 @@ pub async fn send_token(token: &Token) {
 
                 tx = tx.from(wallet.address());
 
-                let tx_cost = provider::estimate_gas(&tx.tx, None).await;
+                let tx_cost = provider::estimate_gas(&mut tx.tx, None).await;
 
                 println!("It'll cost you around {} ETH for this transaction, are you sure you want to continue. [Y/N]", tx_cost);
 

@@ -6,6 +6,8 @@ use ethers::types::TransactionReceipt;
 use rpassword::read_password;
 use std::io::Write;
 
+use crate::networks::get_selected_chain_explorer;
+
 const SEED_PHRASE_LEN: usize = 12;
 const PKEY_LEN: usize = 64;
 
@@ -149,15 +151,20 @@ where
     });
 }
 pub fn log_tx(receipt: Option<TransactionReceipt>) {
+    let explorer_url = get_selected_chain_explorer();
+
     let msg = if receipt.is_some() {
         (
-            "Transaction successful. Transaction hash:",
+            "Transaction successful. View transaction at:",
             LogSeverity::INFO,
         )
     } else {
-        ("Transaction failed. Transaction hash:", LogSeverity::ERROR)
+        (
+            "Transaction failed. View transaction at:",
+            LogSeverity::ERROR,
+        )
     };
 
     log(msg.0, Some(msg.1));
-    println!("{:?}", receipt.unwrap().transaction_hash);
+    println!("{}tx/{:?}", explorer_url, receipt.unwrap().transaction_hash);
 }

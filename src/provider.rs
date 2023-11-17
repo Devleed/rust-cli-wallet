@@ -65,7 +65,7 @@ pub async fn fetch_balance(address: H160) -> Result<f64, Box<dyn std::error::Err
         .parse::<f64>()?)
 }
 
-pub async fn estimate_gas(tx: &TypedTransaction, gas_price: Option<U256>) -> String {
+pub async fn estimate_gas(tx: &mut TypedTransaction, gas_price: Option<U256>) -> String {
     log(
         "Transaction cost is not accurate for Goerli",
         Some(LogSeverity::WARN),
@@ -81,6 +81,8 @@ pub async fn estimate_gas(tx: &TypedTransaction, gas_price: Option<U256>) -> Str
     } else {
         gas_price.unwrap()
     };
+
+    tx.set_gas_price(provider_gas_price);
 
     let gas = provider
         .estimate_gas(tx, None)

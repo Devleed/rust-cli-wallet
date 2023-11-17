@@ -12,13 +12,14 @@ pub const DEFAULT_SELECTED_CHAINID: u8 = 1;
 struct Network {
     name: String,
     url: String,
+    explorer: String,
 }
 
 lazy_static! {
     static ref SELECTED_NETWORK: Mutex<u8> = Mutex::new(DEFAULT_SELECTED_CHAINID);
     static ref NETWORKS: HashMap<u8, Network> = {
         let chains_json =
-            fs::read_to_string("config/chains.json").expect("Failed to read account.");
+            fs::read_to_string("config/chains.json").expect("Failed to read chain configuration. Make sure chains.json exists inside config folder.");
         let network_map: HashMap<u8, Network> = serde_json::from_str(chains_json.trim()).unwrap();
 
         network_map
@@ -32,8 +33,14 @@ pub fn set_network(value: u8) {
     provider::set_provider(NETWORKS.get(&value).unwrap().url.trim());
     wallet::build_wallet(&account::get_account_key().unwrap(), value);
 }
-pub fn get_network_url_by_chain_id(chain_id: &u8) -> &'static str {
-    NETWORKS.get(chain_id).unwrap().url.as_str()
+pub fn get_network_url_by_chain_id(chain_id: &u8) -> String {
+    NETWORKS.get(chain_id).unwrap().url.clone()
+}
+pub fn get_network_name_by_chain_id(chain_id: &u8) -> String {
+    NETWORKS.get(chain_id).unwrap().name.clone()
+}
+pub fn get_network_explorer_by_chain_id(chain_id: &u8) -> String {
+    NETWORKS.get(chain_id).unwrap().explorer.clone()
 }
 pub fn change_network_request() {
     let (chain_ids, mut network_names) = (get_chain_ids(), get_chain_names());
@@ -58,10 +65,13 @@ pub fn get_selected_chain_id() -> u8 {
     data.clone()
 }
 pub fn get_selected_chain_name() -> String {
-    let network_names = get_chain_names();
-    let chain_id: usize = get_selected_chain_id().into();
+    let chain_id: u8 = get_selected_chain_id().into();
+    get_network_name_by_chain_id(&chain_id).clone()
+}
+pub fn get_selected_chain_explorer() -> String {
+    let chain_id: u8 = get_selected_chain_id().into();
 
-    network_names[chain_id].clone()
+    get_network_explorer_by_chain_id(&chain_id).clone()
 }
 
 /* PRIVATE FUNCTIONS */

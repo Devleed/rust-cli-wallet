@@ -83,7 +83,7 @@ pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error
 
     let mut value_str = utils::take_user_input("value", "Enter amount to send in ETH:", None);
 
-    let transaction_req: TypedTransaction = TransactionRequest::new()
+    let mut transaction_req: TypedTransaction = TransactionRequest::new()
         .from(address_from)
         .to(address_to.unwrap())
         .value(U256::from(ethers::utils::parse_ether(value_str.trim())?))
@@ -91,7 +91,7 @@ pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error
 
     let selected_gas_price = gas_price_selector().await;
 
-    let tx_cost = provider::estimate_gas(&transaction_req, Some(selected_gas_price))
+    let tx_cost = provider::estimate_gas(&mut transaction_req, Some(selected_gas_price))
         .await
         .trim()
         .parse::<f64>()?;
