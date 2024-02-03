@@ -13,6 +13,7 @@ struct Network {
     name: String,
     url: String,
     explorer: String,
+    coin: String,
 }
 
 lazy_static! {
@@ -41,6 +42,9 @@ pub fn get_network_name_by_chain_id(chain_id: &u8) -> String {
 }
 pub fn get_network_explorer_by_chain_id(chain_id: &u8) -> String {
     NETWORKS.get(chain_id).unwrap().explorer.clone()
+}
+pub fn get_network_coin_by_chain_id(chain_id: &u8) -> String {
+    NETWORKS.get(chain_id).unwrap().coin.clone()
 }
 pub fn change_network_request() {
     let (chain_ids, mut network_names) = (get_chain_ids(), get_chain_names());
@@ -72,6 +76,11 @@ pub fn get_selected_chain_explorer() -> String {
     let chain_id: u8 = get_selected_chain_id().into();
 
     get_network_explorer_by_chain_id(&chain_id).clone()
+}
+pub fn get_selected_chain_coin() -> String {
+    let chain_id: u8 = get_selected_chain_id().into();
+
+    get_network_coin_by_chain_id(&chain_id).clone()
 }
 
 /* PRIVATE FUNCTIONS */

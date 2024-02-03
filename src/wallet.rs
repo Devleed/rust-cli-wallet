@@ -141,3 +141,19 @@ pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error
         Ok(None)
     }
 }
+
+pub async fn create_dummy_send_tx() -> Option<TypedTransaction> {
+    let wallet = get_wallet();
+
+    if let Some(selected_wallet) = wallet {
+        let transaction_req: TypedTransaction = TransactionRequest::new()
+            .from(selected_wallet.address())
+            .to(selected_wallet.address())
+            .value(U256::from("10000000000"))
+            .into();
+
+        return Some(transaction_req);
+    } else {
+        None
+    }
+}

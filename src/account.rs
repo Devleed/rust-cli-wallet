@@ -6,6 +6,7 @@ use std::io::prelude::*;
 use std::sync::Mutex;
 use std::{fs, panic};
 
+use crate::provider::estimate_gas;
 use crate::utils::{get_account_path, log, LogSeverity};
 use crate::wallet::get_wallet;
 use crate::{beneficiaries, keystore, networks, provider, tokens, utils, wallet};
@@ -132,7 +133,7 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) -> bool {
         "Add beneficiary".to_string(),
         "Change password".to_string(),
         "Delete account (danger)".to_string(),
-        // "Check gas prices".to_string(),
+        "Check gas prices".to_string(),
     ];
 
     let selection = utils::perform_selection("Authenticated dashboard", &mut items, None, false);
@@ -150,7 +151,8 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) -> bool {
     } else if selected_action == 2 {
         // display user balance
         let balance = provider::fetch_balance(wallet.address()).await.unwrap();
-        println!("balance: {} ETH", balance);
+        let coin = networks::get_selected_chain_coin();
+        println!("balance: {} {}", balance, coin);
         return false;
     } else if selected_action == 3 {
         // add token flow
@@ -181,11 +183,15 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) -> bool {
     } else if selected_action == 7 {
         delete_account();
         return true;
+    } else if selected_action == 8 {
+        if let Some(mut dummy_tx) = wallet::create_dummy_send_tx().await {
+            let estimated_gas = estimate_gas(&mut dummy_tx, None).await;
+
+            println!("{}", estimated_gas);
+        }
+
+        return false;
     }
-    //  else if selected_action == 8 {
-    //     provider::get_network_gas_prices().await;
-    //     return false;
-    // }
 
     return false;
 }
