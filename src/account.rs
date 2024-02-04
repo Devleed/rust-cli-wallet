@@ -3,9 +3,12 @@ use ethers::prelude::*;
 use ethers::signers::coins_bip39::{English, Mnemonic};
 use lazy_static::lazy_static;
 use std::io::prelude::*;
+use std::ops::Mul;
 use std::sync::Mutex;
 use std::{fs, panic};
 
+use crate::fiat::{self, set_fiat_rate};
+use crate::networks::get_selected_chain_coin;
 use crate::provider::estimate_gas;
 use crate::utils::{get_account_path, log, LogSeverity};
 use crate::wallet::get_wallet;
@@ -68,6 +71,8 @@ pub async fn launch_app() {
             println!("wallet address: {:?}", wallet.address());
             println!("connected network: {}", connected_network);
 
+            fiat::set_fiat_rate("ETH").await;
+
             loop {
                 let res = launch_authenticated_dashboard(&wallet).await;
                 if res {
@@ -124,16 +129,17 @@ fn create_or_import_wallet(create_new: bool) {
     }
 }
 async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) -> bool {
+    println!("=======================================================================");
     let mut items = vec![
-        "Send eth".to_string(),
+        "Send native token".to_string(),
         "Change network".to_string(),
         "Display balance".to_string(),
         "Add token".to_string(),
         "Select token".to_string(),
         "Add beneficiary".to_string(),
         "Change password".to_string(),
-        "Delete account (danger)".to_string(),
         "Check gas prices".to_string(),
+        "Delete account (danger)".to_string(),
     ];
 
     let selection = utils::perform_selection("Authenticated dashboard", &mut items, None, false);
@@ -146,13 +152,19 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) -> bool {
         return false;
     } else if selected_action == 1 {
         // change network flow
-        networks::change_network_request();
+        networks::change_network_request().await;
         return false;
     } else if selected_action == 2 {
         // display user balance
         let balance = provider::fetch_balance(wallet.address()).await.unwrap();
         let coin = networks::get_selected_chain_coin();
-        println!("balance: {} {}", balance, coin);
+        let fiat_rate = fiat::get_fiat_rate();
+        println!(
+            "balance: {} {} ({} USD)",
+            balance,
+            coin,
+            balance.mul(fiat_rate)
+        );
         return false;
     } else if selected_action == 3 {
         // add token flow
@@ -181,16 +193,23 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) -> bool {
         change_password();
         return false;
     } else if selected_action == 7 {
-        delete_account();
-        return true;
-    } else if selected_action == 8 {
         if let Some(mut dummy_tx) = wallet::create_dummy_send_tx().await {
             let estimated_gas = estimate_gas(&mut dummy_tx, None).await;
+            let selected_coin = get_selected_chain_coin();
+            let fiat_rate = fiat::get_fiat_rate();
 
-            println!("{}", estimated_gas);
+            println!(
+                "Current gas price is estimated to be: {} {} ({} USD)",
+                estimated_gas,
+                selected_coin,
+                estimated_gas.mul(fiat_rate)
+            );
         }
 
         return false;
+    } else if selected_action == 8 {
+        delete_account();
+        return true;
     }
 
     return false;

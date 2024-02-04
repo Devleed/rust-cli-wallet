@@ -2,6 +2,7 @@ use std::{fs, path::Path};
 
 mod account;
 mod beneficiaries;
+mod fiat;
 mod ierc20;
 mod keystore;
 mod networks;

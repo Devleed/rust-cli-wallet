@@ -1,6 +1,7 @@
+use crate::networks::get_selected_chain_coin;
 use crate::provider::gas_price_selector;
 use crate::utils::{is_valid_ethereum_address, launch_tx_thread, log_tx};
-use crate::{beneficiaries, provider, utils};
+use crate::{beneficiaries, fiat, provider, utils};
 use coins_bip32::prelude::SigningKey;
 use ethers::prelude::*;
 use ethers::{
@@ -9,13 +10,14 @@ use ethers::{
     types::{transaction::eip2718::TypedTransaction, TransactionReceipt, TransactionRequest},
 };
 use lazy_static::lazy_static;
+use std::ops::Mul;
 use std::sync::Mutex;
 
 lazy_static! {
     static ref WALLET: Mutex<Option<Wallet<SigningKey>>> = Mutex::new(None);
 }
 
-pub fn build_wallet(account_key: &str, chain_id: u8) {
+pub fn build_wallet(account_key: &str, chain_id: u32) {
     let wallet = if utils::is_pkey(account_key) {
         account_key
             .parse::<LocalWallet>()
@@ -81,7 +83,7 @@ pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error
         return Ok(None);
     }
 
-    let mut value_str = utils::take_user_input("value", "Enter amount to send in ETH:", None);
+    let mut value_str = utils::take_user_input("value", "Enter amount to send:", None);
 
     let mut transaction_req: TypedTransaction = TransactionRequest::new()
         .from(address_from)
@@ -91,10 +93,7 @@ pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error
 
     let selected_gas_price = gas_price_selector().await;
 
-    let tx_cost = provider::estimate_gas(&mut transaction_req, Some(selected_gas_price))
-        .await
-        .trim()
-        .parse::<f64>()?;
+    let tx_cost = provider::estimate_gas(&mut transaction_req, Some(selected_gas_price)).await;
 
     let mut parsed_val = value_str.trim().parse::<f64>()? + tx_cost;
 
@@ -109,9 +108,14 @@ pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error
         parsed_val = value_str.trim().parse::<f64>()? + tx_cost;
     }
 
+    let selected_token = get_selected_chain_coin();
+    let fiat_rate = fiat::get_fiat_rate();
+
     println!(
-        "\nSending {} ETH from {:?} to {:?}\n",
-        value_str.trim(),
+        "\nSending {} {} ({} USD) from {:?} to {:?}\n",
+        parsed_val,
+        selected_token,
+        parsed_val.mul(fiat_rate),
         address_from,
         address_to.unwrap()
     );
@@ -124,12 +128,14 @@ pub async fn send_eth() -> Result<Option<TransactionReceipt>, Box<dyn std::error
 
     if tx_confirmation.trim().to_lowercase() == "y" {
         launch_tx_thread(async move {
-            let sent_tx = client
+            let pending_tx = client
                 .send_transaction(transaction_req, None)
                 .await
-                .unwrap()
-                .await
                 .unwrap();
+
+            println!("Pending tx hash: {:?}", pending_tx.tx_hash());
+
+            let sent_tx = pending_tx.await.unwrap();
 
             let receipt = sent_tx.expect("failed to send transaction");
 

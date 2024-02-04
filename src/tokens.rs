@@ -9,13 +9,10 @@ use crate::beneficiaries;
 use crate::utils::get_account_path;
 use crate::utils::is_valid_ethereum_address;
 use crate::utils::launch_tx_thread;
-use crate::utils::log;
 use crate::utils::log_tx;
 use crate::utils::take_user_input;
-use crate::utils::LogSeverity;
 use crate::wallet;
 use crate::{account, ierc20::IERC20, networks, provider, utils};
-use std::thread;
 use std::{fs, sync::Arc};
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -23,7 +20,7 @@ pub struct Token {
     pub name: String,
     pub decimals: u8,
     pub address: Address,
-    pub chain_id: u8,
+    pub chain_id: u32,
 }
 
 pub async fn add_token() {

@@ -65,7 +65,7 @@ pub async fn fetch_balance(address: H160) -> Result<f64, Box<dyn std::error::Err
         .parse::<f64>()?)
 }
 
-pub async fn estimate_gas(tx: &mut TypedTransaction, gas_price: Option<U256>) -> String {
+pub async fn estimate_gas(tx: &mut TypedTransaction, gas_price: Option<U256>) -> f64 {
     log(
         "Transaction cost is not accurate for Goerli",
         Some(LogSeverity::WARN),
@@ -89,7 +89,10 @@ pub async fn estimate_gas(tx: &mut TypedTransaction, gas_price: Option<U256>) ->
         .await
         .expect("Failed to estimate gas.");
 
-    return ethers::utils::format_ether(gas * provider_gas_price);
+    return ethers::utils::format_ether(gas * provider_gas_price)
+        .trim()
+        .parse()
+        .unwrap();
 }
 
 pub async fn get_network_gas_prices() -> Result<ResultData, &'static str> {

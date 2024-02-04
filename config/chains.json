@@ -9,12 +9,18 @@
     "name": "goerli",
     "url": "https://goerli.infura.io/v3/80ba3747876843469bf0c36d0a355f71",
     "explorer": "https://goerli.etherscan.io/",
-    "coin": "GETH"
+    "coin": "ETH"
   },
   "137": {
     "name": "polygon",
     "url": "https://polygon-rpc.com/",
     "explorer": "https://polygonscan.com/",
+    "coin": "MATIC"
+  },
+  "80001": {
+    "name": "mumbai",
+    "url": "https://rpc-mumbai.maticvigil.com/",
+    "explorer": "https://mumbai.polygonscan.com/",
     "coin": "MATIC"
   }
 }
