@@ -2525,7 +2525,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rust-basics"
+name = "rust-cli-wallet"
 version = "0.1.0"
 dependencies = [
  "base58",

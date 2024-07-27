@@ -7,7 +7,7 @@ use std::ops::Mul;
 use std::sync::Mutex;
 use std::{fs, panic};
 
-use crate::fiat::{self, set_fiat_rate};
+use crate::fiat;
 use crate::networks::get_selected_chain_coin;
 use crate::provider::estimate_gas;
 use crate::utils::{get_account_path, log, LogSeverity};
@@ -136,7 +136,7 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) -> bool {
         "Display balance".to_string(),
         "Add token".to_string(),
         "Select token".to_string(),
-        "Add beneficiary".to_string(),
+        "Beneficiary management".to_string(),
         "Change password".to_string(),
         "Check gas prices".to_string(),
         "Delete account (danger)".to_string(),
@@ -186,7 +186,7 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) -> bool {
         return false;
     } else if selected_action == 5 {
         // add beneficiary flow
-        beneficiaries::add_beneficiary();
+        beneficiaries::beneficiary_menu();
         return false;
     } else if selected_action == 6 {
         // change password flow
@@ -238,7 +238,7 @@ fn create_new_acc(secret: Option<String>) -> (String, String) {
             None,
         );
 
-        while confirmation.trim() != "y" {
+        while confirmation.trim().to_lowercase() != "y" {
             log(
                 "Please save this seed phrase somewhere",
                 Some(LogSeverity::INFO),

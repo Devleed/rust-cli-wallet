@@ -1,5 +1,5 @@
 [package]
-name = "rust-basics"
+name = "rust-cli-wallet"
 version = "0.1.0"
 edition = "2021"
 
@@ -24,3 +24,12 @@ spinners = "4.1.0"
 rpassword = "7.2.0"
 colored = "2.0.4"
 reqwest = "0.11.22"
+
+[package.metadata.deb]
+maintainer = "Muhammad Waleed <mujahidwaleed11@gmail.com>"
+copyright = "2021, 2021 <mujahidwaleed11@gmail.com>"
+
+[build]
+# Specify additional files/directories to include in the package
+include = ["abis/**", "config/**"]
+exclude = ["scripts/**"]

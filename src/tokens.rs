@@ -185,15 +185,17 @@ pub async fn send_token(token: &Token) {
 
                 let tx_cost = provider::estimate_gas(&mut tx.tx, None).await;
 
-                println!("It'll cost you around {} ETH for this transaction, are you sure you want to continue. [Y/N]", tx_cost);
+                println!("It'll cost you around {} for this transaction, are you sure you want to continue. [Y/N]", tx_cost);
 
                 let tx_confirmation = take_user_input("Transaction confirmation", "", None);
 
                 if tx_confirmation.to_lowercase() == "y" {
                     launch_tx_thread(async move {
                         let pending_tx = tx.send().await.unwrap();
+                        println!("Pending tx hash: {:?}", pending_tx.tx_hash());
 
                         let receipt = pending_tx.await.unwrap();
+                        println!("Receipt: {:?}", receipt);
 
                         log_tx(receipt);
                     });

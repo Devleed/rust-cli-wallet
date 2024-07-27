@@ -153,18 +153,13 @@ where
 pub fn log_tx(receipt: Option<TransactionReceipt>) {
     let explorer_url = get_selected_chain_explorer();
 
-    let msg = if receipt.is_some() {
-        (
+    if receipt.is_some() {
+        log(
             "Transaction successful. View transaction at:",
-            LogSeverity::INFO,
-        )
+            Some(LogSeverity::INFO),
+        );
+        println!("{}tx/{:?}", explorer_url, receipt.unwrap().transaction_hash);
     } else {
-        (
-            "Transaction failed. View transaction at:",
-            LogSeverity::ERROR,
-        )
+        log("Transaction failed.", Some(LogSeverity::ERROR));
     };
-
-    log(msg.0, Some(msg.1));
-    println!("{}tx/{:?}", explorer_url, receipt.unwrap().transaction_hash);
 }
