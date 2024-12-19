@@ -19,12 +19,14 @@ async fn main() {
     }
 
     // Load content from abi/erc20.rs at compile time
-    let erc20_abi = include_str!("../abis/erc20.json");
+    let _erc20_abi = include_str!("../abis/erc20.json");
 
     // Load content from config/chains.json at compile time
-    let chains_config = include_str!("../config/chains.json");
+    let _chains_config = include_str!("../config/chains.json");
 
     loop {
+        print!("inside main loop!. ");
+
         account::launch_app().await;
     }
 }

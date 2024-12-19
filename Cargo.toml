@@ -33,3 +33,7 @@ copyright = "2021, 2021 <mujahidwaleed11@gmail.com>"
 # Specify additional files/directories to include in the package
 include = ["abis/**", "config/**"]
 exclude = ["scripts/**"]
+
+[[bin]]
+name = "rust-cli-wallet"
+path = "src/main.rs"
