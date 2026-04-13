@@ -18,12 +18,12 @@ A secure, locally-run Ethereum CLI wallet built in Rust. Manage multiple account
 
 ## Supported Networks
 
-| Network  | Chain ID | Coin  |
-|----------|----------|-------|
-| Mainnet  | 1        | ETH   |
-| Goerli   | 5        | ETH   |
-| Polygon  | 137      | MATIC |
-| Mumbai   | 80001    | MATIC |
+| Network | Chain ID | Coin  |
+| ------- | -------- | ----- |
+| Mainnet | 1        | ETH   |
+| Goerli  | 5        | ETH   |
+| Polygon | 137      | MATIC |
+| Mumbai  | 80001    | MATIC |
 
 Additional networks can be added by editing `config/chains.json`.
 
@@ -39,16 +39,6 @@ Additional networks can be added by editing `config/chains.json`.
 git clone https://github.com/devleed/rust-cli-wallet
 cd rust-cli-wallet
 cargo run
-```
-
-### Docker
-
-```bash
-# Pull the image
-docker pull devleed/rust-cli-wallet
-
-# Run the image
-docker run -it devleed/rust-cli-wallet
 ```
 
 ## Usage
@@ -77,6 +67,7 @@ Once authenticated, the dashboard exposes all wallet actions:
 ### Sending Tokens
 
 When sending native tokens or ERC-20 tokens, the wallet will:
+
 - Show your current balance
 - Let you pick a saved beneficiary or type an address manually
 - Estimate gas cost in the native coin and USD
