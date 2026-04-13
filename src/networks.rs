@@ -33,7 +33,7 @@ pub async fn set_network(value: u32) {
 
     provider::set_provider(NETWORKS.get(&value).unwrap().url.trim());
     wallet::build_wallet(&account::get_account_key().unwrap(), value);
-    fiat::set_fiat_rate(NETWORKS.get(&value).unwrap().coin.trim()).await;
+    fiat::set_fiat_rate("ETH").await;
 }
 pub fn get_network_url_by_chain_id(chain_id: &u32) -> String {
     NETWORKS.get(chain_id).unwrap().url.clone()

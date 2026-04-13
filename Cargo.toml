@@ -24,6 +24,7 @@ spinners = "4.1.0"
 rpassword = "7.2.0"
 colored = "2.0.4"
 reqwest = "0.11.22"
+thiserror = "2.0.9"
 
 [package.metadata.deb]
 maintainer = "Muhammad Waleed <mujahidwaleed11@gmail.com>"

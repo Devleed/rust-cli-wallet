@@ -17,37 +17,44 @@ lazy_static! {
     static ref PROVIDER: Mutex<Provider<Http>> = {
         let network_url =
             networks::get_network_url_by_chain_id(&networks::DEFAULT_SELECTED_CHAINID);
-        Mutex::new(
-            Provider::<Http>::try_from(network_url)
-                .expect("Failed to connect to provider, try again."),
-        )
+
+        let provider = Provider::<Http>::try_from(&network_url);
+
+        match provider {
+            Ok(provider) => Mutex::new(provider),
+            Err(_) => panic!(
+                "Failed to connect to provider for network with chain id {}, try again.",
+                &network_url
+            ),
+        }
     };
 }
 
 #[derive(Debug, Deserialize)]
 struct ApiResponse {
-    status: String,
-    message: String,
     result: ResultData,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
 pub struct ResultData {
-    LastBlock: String,
     SafeGasPrice: String,
     ProposeGasPrice: String,
     FastGasPrice: String,
-    suggestBaseFee: String,
-    gasUsedRatio: String,
 }
 
 pub fn set_provider(network_url: &str) {
     let mut data = PROVIDER.lock().unwrap();
 
-    let provider =
-        Provider::<Http>::try_from(network_url).expect("Failed to connect to provider, try again.");
+    let provider = Provider::<Http>::try_from(network_url);
 
-    *data = provider;
+    match provider {
+        Ok(provider) => *data = provider,
+        Err(_) => panic!(
+            "Failed to connect to provider for network with chain id {}, try again.",
+            network_url
+        ),
+    }
 }
 pub fn get_provider() -> Provider<Http> {
     PROVIDER.lock().unwrap().clone()
@@ -55,10 +62,7 @@ pub fn get_provider() -> Provider<Http> {
 pub async fn fetch_balance(address: H160) -> Result<f64, Box<dyn std::error::Error>> {
     let provider = PROVIDER.lock().unwrap();
 
-    let balance = provider
-        .get_balance(address, None)
-        .await
-        .expect("Failed to fetch user balance");
+    let balance = provider.get_balance(address, None).await?;
 
     Ok(ethers::utils::format_units(balance, "ether")?
         .trim()

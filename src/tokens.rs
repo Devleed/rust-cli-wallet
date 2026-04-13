@@ -212,8 +212,9 @@ enum ContractInstance {
 
 /* PRIVATE FUNTIONS */
 fn create_contract_instance(token_address: H160, with_signer: bool) -> ContractInstance {
+    let provider = provider::get_provider();
+
     if with_signer {
-        let provider = provider::get_provider();
         let wallet = wallet::get_wallet().unwrap();
         let client = Arc::new(SignerMiddleware::new(provider, wallet));
 
@@ -221,7 +222,6 @@ fn create_contract_instance(token_address: H160, with_signer: bool) -> ContractI
 
         return ContractInstance::SignerMiddlewareHttp(contract);
     } else {
-        let provider = provider::get_provider();
         let client = Arc::new(provider);
 
         let contract = IERC20::new(token_address, client);

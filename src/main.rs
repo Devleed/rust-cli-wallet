@@ -1,4 +1,6 @@
 use std::{fs, path::Path};
+use thiserror::Error;
+use web3_keystore::KeyStoreError;
 
 mod account;
 mod beneficiaries;
@@ -10,6 +12,21 @@ mod provider;
 mod tokens;
 mod utils;
 mod wallet;
+
+#[derive(Error, Debug)]
+pub enum AppError {
+    /// KeyStore-related errors
+    #[error(transparent)]
+    KeyStoreError(#[from] KeyStoreError),
+
+    /// Some other error type
+    #[error(transparent)]
+    OtherError(#[from] std::io::Error),
+
+    /// Any additional error types you want to support
+    #[error("Custom error: {0}")]
+    Custom(String),
+}
 
 #[tokio::main]
 async fn main() {

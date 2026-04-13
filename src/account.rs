@@ -5,14 +5,14 @@ use lazy_static::lazy_static;
 use std::io::prelude::*;
 use std::ops::Mul;
 use std::sync::Mutex;
-use std::{fs, panic};
+use std::{fs};
 
-use crate::fiat;
 use crate::networks::get_selected_chain_coin;
 use crate::provider::estimate_gas;
 use crate::utils::{get_account_path, log, LogSeverity};
 use crate::wallet::get_wallet;
 use crate::{beneficiaries, keystore, networks, provider, tokens, utils, wallet};
+use crate::{fiat, AppError};
 
 lazy_static! {
     static ref ACCOUNT_KEY: Mutex<Option<String>> = Mutex::new(None);
@@ -140,6 +140,7 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) -> bool {
         "Change password".to_string(),
         "Check gas prices".to_string(),
         "Delete account (danger)".to_string(),
+        "Logout".to_string(),
     ];
 
     let selection = utils::perform_selection("Authenticated dashboard", &mut items, None, false);
@@ -209,6 +210,11 @@ async fn launch_authenticated_dashboard(wallet: &Wallet<SigningKey>) -> bool {
         return false;
     } else if selected_action == 8 {
         delete_account();
+        return true;
+    } else if selected_action == 9 {
+        set_account_key(None);
+        set_account_name(None);
+        wallet::set_wallet(None);
         return true;
     }
 
@@ -299,10 +305,7 @@ fn create_wallet() {
         wallet::build_wallet(&account_key, networks::get_selected_chain_id());
     }
 }
-fn try_deserializing_account(
-    acc_name: &str,
-    password: &str,
-) -> Result<String, web3_keystore::KeyStoreError> {
+fn try_deserializing_account(acc_name: &str, password: &str) -> Result<String, AppError> {
     // * create file path
     let file_name = get_account_path(acc_name);
     println!("path name {}", file_name);
@@ -311,9 +314,12 @@ fn try_deserializing_account(
     keystore_path.push_str("/keystore.json");
 
     // * read file from given path
-    let account_json = fs::read_to_string(keystore_path.trim()).expect("Failed to read account.");
+    let account_json = fs::read_to_string(keystore_path.trim())?;
 
-    keystore::deserialize_keystore(&account_json, password)
+    // * Deserialize keystore
+    let keystore_data = keystore::deserialize_keystore(&account_json, password)?; // Propagate KeyStoreError as AppError
+
+    Ok(keystore_data)
 }
 fn select_account(acc_name: &str) {
     let password_string = utils::take_valid_password_input("Enter password:");
@@ -326,17 +332,50 @@ fn select_account(acc_name: &str) {
 
         wallet::build_wallet(&secret_key.unwrap(), networks::get_selected_chain_id());
     } else {
-        let error = secret_key.err();
-
-        if keystore::is_wrong_password(error.unwrap()) {
-            log(
-                "Wrong password, please try again.",
-                Some(LogSeverity::ERROR),
+        if let Err(AppError::KeyStoreError(keystore_error)) = secret_key {
+            if keystore::is_wrong_password(keystore_error) {
+                log(
+                    "Wrong password, please try again.",
+                    Some(LogSeverity::ERROR),
+                );
+                select_account(acc_name)
+            } else {
+                eprintln!("An unknown error occured while parsing keystore, please try again.");
+            }
+        } else if let Err(other_error) = secret_key {
+            println!(
+                "An error occurred while deserializing account: {}",
+                other_error
             );
-            select_account(acc_name)
-        } else {
-            panic!("Something went wrong.");
         }
+
+        // match error {
+        //     AppError::KeyStoreError(err) => {
+        //         if keystore::is_wrong_password(err) {
+        //             log(
+        //                 "Wrong password, please try again.",
+        //                 Some(LogSeverity::ERROR),
+        //             );
+        //             select_account(acc_name)
+        //         } else {
+        //             panic!("Something went wrong.");
+        //         }
+        //     }
+
+        //     _ => {
+        //         log("msg", severity);
+        //     }
+        // }
+
+        // if keystore::is_wrong_password(error.unwrap()) {
+        //     log(
+        //         "Wrong password, please try again.",
+        //         Some(LogSeverity::ERROR),
+        //     );
+        //     select_account(acc_name)
+        // } else {
+        //     panic!("Something went wrong.");
+        // }
     }
 }
 fn create_account_file(account_name: &str, account_json: &str) {

@@ -163,3 +163,24 @@ pub fn log_tx(receipt: Option<TransactionReceipt>) {
         log("Transaction failed.", Some(LogSeverity::ERROR));
     };
 }
+
+pub async fn fetch_and_parse<T>(url: &str) -> Result<T, String>
+where
+    T: serde::de::DeserializeOwned,
+{
+    let response = reqwest::get(url)
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if response.status().is_success() {
+        response
+            .json::<T>()
+            .await
+            .map_err(|e| format!("Failed to parse response: {}", e))
+    } else {
+        Err(format!(
+            "Request failed with status code: {}",
+            response.status()
+        ))
+    }
+}
